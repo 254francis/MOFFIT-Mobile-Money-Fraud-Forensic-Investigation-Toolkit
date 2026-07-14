@@ -132,10 +132,6 @@ MOFFIT is built in a 3-week sprint using [Jules](https://jules.google/) (Google'
 - ISO/IEC 27037:2012. *Guidelines for identification, collection, acquisition and preservation of digital evidence.*
 - Pourhabibi, T., Ong, K.-L., Kam, B. H., & Boo, Y. L. (2020). Fraud detection: A systematic literature review of graph-based anomaly detection approaches. *Decision Support Systems, 133*.
 
-## License
-
-MIT — see [LICENSE](LICENSE).
-
 ## Author
 
-Francis — B.Sc. Computer Science (Cybersecurity Forensics), USIU-Africa, Nairobi.
+Francis Mwangi — B.Sc. Computer Science (Concentration in Forensics and Cybercrime), USIU-Africa, Nairobi.
