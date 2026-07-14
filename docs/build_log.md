@@ -5,6 +5,25 @@
 - Merged PR #2 (PaySim ingestion): verified column normalization incl. oldbalanceOrg -> sender_balance_before.
 - Merged PR #3 (case DB): verified SHA-256/MD5 auto-hashing in add_evidence, Finding.confidence as float.
 - Local verification: pip install -e . clean, moffit --help OK, pytest 11/11 passed (1.48s).
-- Environment note: running Python 3.14.6 (spec says 3.11+) — no issues observed.
+- Environment note: running Python 3.14.6 — no issues observed.
 - Queued issues #4, #6, #8 to check and implement by 15-07-2026.
-
+- Merged PR #4 (transaction graph builder) and PR #6 (CLI interface).
+- Resolved merge conflict on PR #8 branch: I had committed __pycache__/*.pyc
+  bytecode artifacts to version control. Purged via git rm --cached, unified
+  .gitignore (added __pycache__/, *.pyc, venv/, *.db, .env).
+- Merged PR #8 (evidence hashing + chain of custody) after conflict resolution.
+- Caught missing dependency: graph_builder.py imports matplotlib but PR #4 did not
+  declare it in pyproject.toml — pytest collection failed with ModuleNotFoundError.
+  Fixed by hand (added matplotlib>=3.8), commit 086b02a.
+- Local verification: pytest 20/20 passed (case_db 6, graph_builder 5, ingestion 5,
+  integrity 4).
+- Repo migrated from Sapien100/ to 254francis/ account; updated git remote URL and
+  re-pointed automated tools used at the new location.
+- First end-to-end smoke test on real data:
+  - Created case TEST-001 (c8a9c5fb-9c31-47f0-a43b-372881364f08).
+  - Ingested full PaySim dataset: 6,362,620 rows (~470MB), no memory issues.
+  - Evidence registered with SHA-256 16910f90577b0d981bf8ff289714510bb89bc71b...
+    and MD5 e92a5f7447f43712f1dca473d0b0fa85 (evidence 4461c547...).
+  - moffit case list confirms persistence: 1 case, 1 evidence item, 0 findings
+    (findings expected zero — detector is issue #5, in progress).
+- Queued issue #5 (fraud pattern detector) to workflow. Next in chain: #7 → #9.
