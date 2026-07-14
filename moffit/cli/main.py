@@ -181,10 +181,16 @@ def analyze(
         task = progress.add_task("[cyan]Running fraud pattern detection...", total=100)
 
         # Stub data loading
-        progress.update(task, advance=20, description="[cyan]Loading case data...")
-        # In a real app we'd load the df associated with the case
-        import pandas as pd
-        dummy_df = pd.DataFrame()
+        progress.update(task, advance=10, description="[cyan]Locating case evidence...")
+        evidence_items = manager.get_evidence(case_id)
+        csv_paths = [e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")]
+        if not csv_paths:
+            console.print("[red]No CSV evidence registered for this case. Run 'moffit ingest' first.[/red]")
+            raise typer.Exit(1)
+
+        progress.update(task, advance=10, description="[cyan]Loading case data...")
+        loader = PaySimLoader()
+        dummy_df = loader.normalize(loader.load_csv(csv_paths[0]))
 
         progress.update(task, advance=40, description="[cyan]Analyzing patterns...")
         detector = FraudPatternDetector()

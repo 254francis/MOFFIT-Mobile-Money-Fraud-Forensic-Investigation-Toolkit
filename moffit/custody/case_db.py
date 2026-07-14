@@ -98,7 +98,7 @@ class CaseManager:
 
         md5_hash = md5.hexdigest()
         sha256_hash = sha256.hexdigest()
-        filename = os.path.basename(filepath)
+        filename = os.path.abspath(filepath)
 
         with self.Session() as session:
             # Check if case exists
@@ -207,3 +207,11 @@ class CaseManager:
             findings = session.execute(select(Finding).filter(Finding.case_id == case_id)).scalars().all()
             session.expunge_all()
             return list(findings)
+    def get_evidence(self, case_id: str) -> List[Evidence]:
+        """
+        Returns all evidence records for a specific case.
+        """
+        with self.Session() as session:
+            evidence = session.execute(select(Evidence).filter(Evidence.case_id == case_id)).scalars().all()
+            session.expunge_all()
+            return list(evidence)

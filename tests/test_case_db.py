@@ -54,7 +54,7 @@ def test_add_evidence(tmp_path):
 
     assert evidence.id is not None
     assert evidence.case_id == case.id
-    assert evidence.filename == "evidence.txt"
+    assert evidence.filename == os.path.abspath(str(evidence_path))
     assert evidence.file_size == 9
     assert evidence.md5_hash == expected_md5
     assert evidence.sha256_hash == expected_sha256
