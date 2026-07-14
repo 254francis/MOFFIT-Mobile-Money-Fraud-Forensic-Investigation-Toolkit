@@ -8,7 +8,7 @@ from typing import Optional
 
 from moffit.custody.case_db import CaseManager
 from moffit.ingestion.paysim_loader import PaySimLoader
-from moffit.detection.detector import FraudPatternDetector
+from moffit.detection.pattern_detector import FraudPatternDetector
 from moffit.timeline.generator import TimelineGenerator
 
 app = typer.Typer(help="MOFFIT (Mobile Money Fraud Forensic Investigation Toolkit) CLI")
@@ -187,17 +187,22 @@ def analyze(
         dummy_df = pd.DataFrame()
 
         progress.update(task, advance=40, description="[cyan]Analyzing patterns...")
-        detector = FraudPatternDetector(dummy_df)
-        findings = detector.analyze(account_id=account)
+        detector = FraudPatternDetector()
+        if account is not None and not dummy_df.empty:
+            filtered_df = dummy_df[(dummy_df["sender_id"] == account) | (dummy_df["receiver_id"] == account)]
+            findings = detector.analyze(filtered_df)
+        else:
+            findings = detector.analyze(dummy_df)
 
         progress.update(task, advance=30, description="[cyan]Saving findings to DB...")
         for f in findings:
+            severity = "high" if f["confidence"] >= 0.9 else ("medium" if f["confidence"] >= 0.75 else "low")
             manager.add_finding(
                 case_id=case_id,
-                finding_type=f["finding_type"],
-                severity=f["severity"],
+                finding_type=f["pattern"],
+                severity=severity,
                 description=f["description"],
-                account_ids=f["account_ids"],
+                account_ids=[f["account_id"]],
                 step_start=f["step_start"],
                 step_end=f["step_end"],
                 confidence=f["confidence"]
@@ -215,9 +220,9 @@ def analyze(
 
     for f in findings:
         table.add_row(
-            get_severity_badge(f["severity"]),
-            f["finding_type"],
-            ", ".join(f["account_ids"]),
+            get_severity_badge("high" if f["confidence"] >= 0.9 else ("medium" if f["confidence"] >= 0.75 else "low")),
+            f["pattern"],
+            f["account_id"],
             f"{f['step_start']}-{f['step_end']}",
             f"{f['confidence'] * 100:.0f}%"
         )
