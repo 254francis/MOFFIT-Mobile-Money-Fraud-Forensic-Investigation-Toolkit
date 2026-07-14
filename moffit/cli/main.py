@@ -9,7 +9,7 @@ from typing import Optional
 from moffit.custody.case_db import CaseManager
 from moffit.ingestion.paysim_loader import PaySimLoader
 from moffit.detection.pattern_detector import FraudPatternDetector
-from moffit.timeline.generator import TimelineGenerator
+from moffit.timeline.reconstructor import TimelineReconstructor
 
 app = typer.Typer(help="MOFFIT (Mobile Money Fraud Forensic Investigation Toolkit) CLI")
 case_app = typer.Typer(help="Manage investigation cases")
@@ -255,8 +255,11 @@ def timeline(
     # In a real app we'd get df and findings for this case
     import pandas as pd
     dummy_df = pd.DataFrame()
-    generator = TimelineGenerator(dummy_df, findings=[])
-    events = generator.generate(account_id=account)
+    reconstructor = TimelineReconstructor()
+    events = reconstructor.build_account_timeline(dummy_df, account_id=account)
+    events = reconstructor.annotate_events(events, [])
+    events = reconstructor.to_dict_list(events)
+
 
     table = Table(title=f"Transaction Timeline: {account}")
     table.add_column("Step", justify="right", style="cyan")
