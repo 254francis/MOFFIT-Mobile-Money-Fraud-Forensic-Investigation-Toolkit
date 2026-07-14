@@ -153,6 +153,35 @@ class CaseManager:
             session.commit()
             session.refresh(finding)
             return finding
+        
+    def add_findings_bulk(self, case_id: str, findings: List[Dict[str, Any]]) -> int:
+        """
+        Inserts many findings for a case in a single transaction.
+        Each dict requires: finding_type, severity, description,
+        account_ids, step_start, step_end, confidence.
+        Returns the number of findings inserted.
+        """
+        with self.Session() as session:
+            case = session.execute(select(Case).filter(Case.id == case_id)).scalar_one_or_none()
+            if not case:
+                raise ValueError(f"Case not found: {case_id}")
+
+            objs = [
+                Finding(
+                    case_id=case_id,
+                    finding_type=f["finding_type"],
+                    severity=f["severity"],
+                    description=f["description"],
+                    account_ids=f["account_ids"],
+                    step_start=f["step_start"],
+                    step_end=f["step_end"],
+                    confidence=f["confidence"],
+                )
+                for f in findings
+            ]
+            session.add_all(objs)
+            session.commit()
+            return len(objs)
 
     def get_case_summary(self, case_id: str) -> Dict[str, Any]:
         """

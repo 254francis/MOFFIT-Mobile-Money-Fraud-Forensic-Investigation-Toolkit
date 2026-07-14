@@ -98,7 +98,8 @@ def test_balance_inconsistency():
     findings = detector.balance_inconsistency(df)
     assert len(findings) == 1
     assert findings[0]['pattern'] == 'balance_inconsistency'
-    assert findings[0]['account_id'] == 'A'
+    assert findings[0]['account_id'] == 'DATASET'
+    assert '1 of 1 transactions' in findings[0]['description']
     assert findings[0]['confidence'] == 1.0
 
 def test_analyze():

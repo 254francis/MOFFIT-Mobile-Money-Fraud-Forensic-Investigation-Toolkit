@@ -201,18 +201,20 @@ def analyze(
             findings = detector.analyze(dummy_df)
 
         progress.update(task, advance=30, description="[cyan]Saving findings to DB...")
+        
+        payload = []
         for f in findings:
             severity = "high" if f["confidence"] >= 0.9 else ("medium" if f["confidence"] >= 0.75 else "low")
-            manager.add_finding(
-                case_id=case_id,
-                finding_type=f["pattern"],
-                severity=severity,
-                description=f["description"],
-                account_ids=[f["account_id"]],
-                step_start=f["step_start"],
-                step_end=f["step_end"],
-                confidence=f["confidence"]
-            )
+            payload.append({
+                "finding_type": f["pattern"],
+                "severity": severity,
+                "description": f["description"],
+                "account_ids": [f["account_id"]],
+                "step_start": f["step_start"],
+                "step_end": f["step_end"],
+                "confidence": f["confidence"],
+            })
+        manager.add_findings_bulk(case_id, payload)
 
         progress.update(task, advance=10, description="[green]Analysis complete!")
 
