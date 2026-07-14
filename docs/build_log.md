@@ -35,3 +35,14 @@
   records now identify acquisition location), wired analyze to evidence lookup →
   PaySimLoader.load_csv → normalize → FraudPatternDetector. Updated test_add_evidence
   to the new path contract. 27/27 tests passing.
+  - Performance intervention (#5): naive detectors unusable at scale. Profiled per-
+  detector on 500K rows; found groupby-Python-loops over ~400K near-singleton
+  account groups (rapid_drain, fan_out, fan_in), iterrows in dormant_activation,
+  and per-finding DB commits as compounding bottlenecks. Fixes: vectorized
+  candidate pre-filters (strict superset, detection logic unchanged), cumcount
+  rewrite of dormant_activation, balance_inconsistency redefined to one dataset-
+  level finding (78.3% of PaySim rows fail reconciliation — dataset property, not
+  account signal), add_findings_bulk single-transaction insert. Result: 500K
+  analyze >20min (aborted) -> 2m08s; 309,607 findings persisted. Detection-only
+  time ~48s. Round_trip — the reviewer's prime suspect — was Jules's best-
+  implemented detector (vectorized self-merge); profiling beat intuition.
