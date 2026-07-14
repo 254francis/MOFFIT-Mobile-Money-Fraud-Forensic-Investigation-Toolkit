@@ -27,3 +27,11 @@
   - moffit case list confirms persistence: 1 case, 1 evidence item, 0 findings
     (findings expected zero — detector is issue #5, in progress).
 - Queued issue #5 (fraud pattern detector) to workflow. Next in chain: #7 → #9.
+-  (most significant change of the day): moffit analyze was a stub fixed that — 
+  CLI predated the #5 detector and analyzed an empty DataFrame (dummy_df), returning
+  zero findings in 2.2s with a success message. Integration seam between parallel
+  issues that no single task owned. Fixed by hand: added CaseManager.get_evidence(),
+  changed add_evidence to store absolute paths (forensically more correct — evidence
+  records now identify acquisition location), wired analyze to evidence lookup →
+  PaySimLoader.load_csv → normalize → FraudPatternDetector. Updated test_add_evidence
+  to the new path contract. 27/27 tests passing.
