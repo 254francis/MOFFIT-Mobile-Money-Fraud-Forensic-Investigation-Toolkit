@@ -54,3 +54,10 @@
   PaySim dataset properties (accounts avg ~1.9 txns -> dormant fires broadly;
   drains are normal PaySim behavior). Documented as empirical motivation for ML
   triage layer (issue #11). Superlinear scaling noted (12.7x data -> 35x time).
+  - Merged PR #7 (timeline reconstruction). Merge conflict in cli/main.py (Jules's
+  \suggestion vs local implementation) — resolved keeping account-filtered findings
+  (annotate_events matches by step range only; unfiltered findings cross-
+  contaminate) + Jules's try/except; added narrative panel output. 31/31 tests.
+- Timeline smoke test on TEST-500K, account C1000022742: correct chronology,
+  [RAPID DRAIN][ACCOUNT DRAINED] annotations, coherent auto-narrative. Pipeline
+  stages 1-3 (ingest -> analyze -> timeline) verified end-to-end on real data.
