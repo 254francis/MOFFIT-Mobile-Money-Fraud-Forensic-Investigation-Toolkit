@@ -1,3 +1,4 @@
+from moffit.reporting.pdf_report import ForensicReportGenerator
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -318,7 +319,128 @@ def report(
         case_id (str): The UUID of the case.
         output (str): The output file path for the PDF report.
     """
-    console.print(f"Report saved to {output}")
+    manager = get_case_manager()
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console
+    ) as progress:
+        task = progress.add_task("[cyan]Generating PDF report...", total=100)
+
+        progress.update(task, advance=10, description="[cyan]Loading case summary...")
+        try:
+            summary = manager.get_case_summary(case_id)
+            case_info = summary.get("case", {"id": case_id})
+        except Exception as e:
+            console.print(f"[red]Failed to load case {case_id}: {str(e)}[/red]")
+            raise typer.Exit(1)
+
+        progress.update(task, advance=10, description="[cyan]Loading evidence and custody manifest...")
+        evidence_items = manager.get_evidence(case_id)
+
+        # Build custody manifest
+        from moffit.custody.integrity import EvidenceManifest
+        manifest = EvidenceManifest()
+        for e in evidence_items:
+            # We don't want to re-hash the files as they might not exist anymore,
+            # we just construct the custody dict from the db.
+            manifest.items.append({
+                "type": "file",
+                "filepath": e.filename,
+                "filename": e.filename.split('/')[-1] if e.filename else '',
+                "file_size": e.file_size,
+                "sha256": e.sha256_hash,
+                "md5": e.md5_hash,
+                "acquired_at": e.acquired_at.isoformat() if e.acquired_at else '',
+                "notes": e.notes or ""
+            })
+        custody = manifest.finalize(case_id, case_info.get("investigator", "Unknown"))
+
+        progress.update(task, advance=10, description="[cyan]Loading findings...")
+        findings_objs = manager.get_findings(case_id)
+        findings = []
+        for f in findings_objs:
+            findings.append({
+                "id": f.id,
+                "finding_type": f.finding_type,
+                "severity": f.severity,
+                "description": f.description,
+                "account_ids": f.account_ids,
+                "step_start": f.step_start,
+                "step_end": f.step_end,
+                "confidence": f.confidence,
+                "created_at": f.created_at.isoformat() if f.created_at else ''
+            })
+
+        progress.update(task, advance=20, description="[cyan]Reconstructing timelines...")
+
+        # Get CSV evidence for timelines
+        csv_paths = [e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")]
+
+        timeline_map = {}
+        narrative = ""
+
+        if csv_paths and findings:
+            loader = PaySimLoader()
+            try:
+                df = loader.normalize(loader.load_csv(csv_paths[0]))
+
+                # Get top flagged accounts
+                # Sort findings by severity then confidence
+                sev_map = {"high": 3, "medium": 2, "low": 1}
+                sorted_f = sorted(findings, key=lambda x: (sev_map.get(x.get('severity', 'low').lower(), 0), x.get('confidence', 0)), reverse=True)
+
+                top_accounts = []
+                for f in sorted_f:
+                    accs = f.get('account_ids', [])
+                    for a in accs:
+                        if a not in top_accounts:
+                            top_accounts.append(a)
+                    if len(top_accounts) >= 5: # Limit to top 5 accounts to prevent massive reports
+                        break
+
+                top_accounts = top_accounts[:5]
+                reconstructor = TimelineReconstructor()
+
+                first_account_narrative = ""
+
+                for account in top_accounts:
+                    events = reconstructor.build_account_timeline(df, account_id=account)
+
+                    acc_findings = [f for f in findings if account in (f.get('account_ids') or [])]
+                    events = reconstructor.annotate_events(events, acc_findings)
+
+                    timeline_map[account] = reconstructor.to_dict_list(events)
+
+                    if not first_account_narrative and events:
+                        first_account_narrative = reconstructor.generate_narrative(events, account, acc_findings)
+
+                narrative = first_account_narrative
+
+            except Exception as e:
+                console.print(f"[yellow]Failed to load CSV for timeline reconstruction: {str(e)}[/yellow]")
+        else:
+            if not findings:
+                narrative = "No findings were recorded for this case."
+            else:
+                narrative = "Timeline data could not be reconstructed because no CSV evidence is registered for this case."
+
+        progress.update(task, advance=40, description="[cyan]Rendering PDF report...")
+        generator = ForensicReportGenerator()
+        generator.generate(
+            case=case_info,
+            findings=findings,
+            timeline_map=timeline_map,
+            custody=custody,
+            narrative=narrative,
+            output_path=output
+        )
+
+        progress.update(task, advance=10, description="[green]Report generation complete!")
+
     console.print(Panel.fit(f"[green]Successfully generated report at {output}[/green]", title="Success", border_style="green"))
 
 if __name__ == "__main__":
