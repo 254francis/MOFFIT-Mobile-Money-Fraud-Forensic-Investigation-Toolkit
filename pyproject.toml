@@ -19,7 +19,11 @@ dependencies = [
     "typer",
     "python-dotenv",
     "pytest",
-    "httpx"
+    "httpx",
+    "scikit-learn>=1.4",
+    "xgboost>=2.0",
+    "imbalanced-learn>=0.12",
+    "shap>=0.45"
 ]
 
 [project.scripts]

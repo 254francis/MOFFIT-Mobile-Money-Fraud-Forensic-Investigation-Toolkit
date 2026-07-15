@@ -15,6 +15,8 @@ from moffit.timeline.reconstructor import TimelineReconstructor
 app = typer.Typer(help="MOFFIT (Mobile Money Fraud Forensic Investigation Toolkit) CLI")
 case_app = typer.Typer(help="Manage investigation cases")
 app.add_typer(case_app, name="case")
+ml_app = typer.Typer(help="ML fraud classification")
+app.add_typer(ml_app, name="ml")
 
 console = Console()
 
@@ -442,6 +444,124 @@ def report(
         progress.update(task, advance=10, description="[green]Report generation complete!")
 
     console.print(Panel.fit(f"[green]Successfully generated report at {output}[/green]", title="Success", border_style="green"))
+
+@ml_app.command("train")
+def ml_train(
+    case_id: str = typer.Option(..., "--case-id", help="UUID of the case")
+) -> None:
+    """
+    Trains ML models on the case evidence and produces evaluation artifacts.
+    """
+    from moffit.ml.evaluate import evaluate_all
+    import json
+
+    manager = get_case_manager()
+    evidence_items = manager.get_evidence(case_id)
+    csv_paths = [e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")]
+    if not csv_paths:
+        console.print("[red]No CSV evidence registered for this case.[/red]")
+        raise typer.Exit(1)
+
+    loader = PaySimLoader()
+    df = loader.normalize(loader.load_csv(csv_paths[0]))
+
+    output_dir = os.path.join("reports", "ml", case_id)
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console
+    ) as progress:
+        task = progress.add_task("[cyan]Training models...", total=100)
+
+        progress.update(task, advance=50, description="[cyan]Extracting features and training...")
+        metrics = evaluate_all(df, output_dir)
+
+        progress.update(task, advance=50, description="[green]Training complete!")
+
+    table = Table(title="Model Evaluation Metrics")
+    table.add_column("Model", style="cyan")
+    table.add_column("Precision", justify="right")
+    table.add_column("Recall", justify="right")
+    table.add_column("F1-Score", justify="right")
+    table.add_column("AUPRC", justify="right")
+    table.add_column("ROC-AUC", justify="right")
+
+    for model_name, m in metrics.items():
+        table.add_row(
+            model_name,
+            f"{m['precision']:.3f}",
+            f"{m['recall']:.3f}",
+            f"{m['f1']:.3f}",
+            f"{m['auprc']:.3f}",
+            f"{m['roc_auc']:.3f}"
+        )
+
+    console.print(table)
+    console.print(Panel.fit(f"[green]Artifacts saved to {output_dir}[/green]", title="Success", border_style="green"))
+
+
+@ml_app.command("rank")
+def ml_rank(
+    case_id: str = typer.Option(..., "--case-id", help="UUID of the case"),
+    top: int = typer.Option(20, "--top", help="Number of top accounts to display")
+) -> None:
+    """
+    Ranks accounts by fraud probability using the trained XGBoost model.
+    """
+    from moffit.ml.features import FeatureEngineer
+    from moffit.ml.classifier import FraudClassifier
+
+    manager = get_case_manager()
+    evidence_items = manager.get_evidence(case_id)
+    csv_paths = [e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")]
+    if not csv_paths:
+        console.print("[red]No CSV evidence registered for this case.[/red]")
+        raise typer.Exit(1)
+
+    output_dir = os.path.join("reports", "ml", case_id)
+    model_path = os.path.join(output_dir, "xgboost_model.joblib")
+    if not os.path.exists(model_path):
+        console.print("[red]No trained XGBoost model found. Run 'moffit ml train' first.[/red]")
+        raise typer.Exit(1)
+
+    loader = PaySimLoader()
+    df = loader.normalize(loader.load_csv(csv_paths[0]))
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console
+    ) as progress:
+        task = progress.add_task("[cyan]Ranking accounts...", total=None)
+
+        fe = FeatureEngineer()
+        X = fe.transform(df)
+
+        clf = FraudClassifier.load(model_path)
+        ranked_df = clf.rank_accounts(df, X)
+
+        progress.update(task, completed=100)
+
+    table = Table(title=f"Top {top} Accounts by Fraud Probability")
+    table.add_column("Rank", justify="right", style="cyan")
+    table.add_column("Account ID", style="magenta")
+    table.add_column("Max Fraud Probability", justify="right", style="yellow")
+    table.add_column("Transaction Count", justify="right")
+
+    top_df = ranked_df.head(top)
+    for i, row in top_df.iterrows():
+        table.add_row(
+            str(i + 1),
+            str(row["account_id"]),
+            f"{row['max_fraud_probability']:.4f}",
+            str(row["tx_count"])
+        )
+
+    console.print(table)
+
 
 if __name__ == "__main__":
     app()
