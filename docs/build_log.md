@@ -44,5 +44,5 @@
   level finding (78.3% of PaySim rows fail reconciliation — dataset property, not
   account signal), add_findings_bulk single-transaction insert. Result: 500K
   analyze >20min (aborted) -> 2m08s; 309,607 findings persisted. Detection-only
-  time ~48s. Round_trip — the reviewer's prime suspect — was Jules's best-
+  time ~48s. Round_trip — did an individual since i suspected this was the main suspect — reason being it was Jules's best-
   implemented detector (vectorized self-merge); profiling beat intuition.
