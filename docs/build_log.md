@@ -46,3 +46,11 @@
   analyze >20min (aborted) -> 2m08s; 309,607 findings persisted. Detection-only
   time ~48s. Round_trip — did an individual since i suspected this was the main suspect — reason being it was Jules's best-
   implemented detector (vectorized self-merge); profiling beat intuition.
+- Full-dataset benchmark (6,362,620 rows): analyze completed in 74m05s (~70s/100K,
+  criterion <5min/100K PASSED). 3,808,826 findings: dormant_activation 2,212,161,
+  rapid_drain 1,561,362, fan_in 35,302, balance_inconsistency 1 (dataset-level),
+  round_trip 0, fan_out 0. Detection rate vs isFraud ground truth: 8,192/8,213 =
+  99.7% (criterion >=90% PASSED). Precision ~0.2% — rule thresholds collide with
+  PaySim dataset properties (accounts avg ~1.9 txns -> dormant fires broadly;
+  drains are normal PaySim behavior). Documented as empirical motivation for ML
+  triage layer (issue #11). Superlinear scaling noted (12.7x data -> 35x time).
