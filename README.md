@@ -115,9 +115,6 @@ docs/           methodology + design docs
 - **Kenya Computer Misuse and Cybercrimes Act (2018)** — admissibility context for electronic evidence
 - **Kenya Data Protection Act (2019)** — synthetic data used precisely to avoid processing real personal financial data
 
-## Development Approach
-
-MOFFIT is built in a 3-week sprint using [Jules](https://jules.google/) (Google's async coding agent) against a set of 10 scoped GitHub issues — see [`JULES_PROMPTS.md`](JULES_PROMPTS.md). Every PR is human-reviewed before merge; architecture, fraud-pattern logic, and forensic methodology are the author's own. See [`FRAMEWORK.md`](FRAMEWORK.md) for the research and design framework.
 
 ## Success Criteria
 
