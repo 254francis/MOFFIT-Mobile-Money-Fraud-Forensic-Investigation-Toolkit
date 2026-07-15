@@ -24,21 +24,21 @@ def test_build_account_timeline():
     assert len(events_A) == 3
 
     assert events_A[0].step == 1
-    assert events_A[0].event_type == 'CASH_IN'
+    assert events_A[0].event_type == 'CASH_IN_SENDER'
     assert events_A[0].counterparty == 'B'
     assert events_A[0].balance_before == 0.0
     assert events_A[0].balance_after == 1000.0
     assert events_A[0].is_flagged == False
 
     assert events_A[1].step == 2
-    assert events_A[1].event_type == 'TRANSFER'
+    assert events_A[1].event_type == 'TRANSFER_SENDER'
     assert events_A[1].counterparty == 'C'
     assert events_A[1].balance_before == 1000.0
     assert events_A[1].balance_after == 500.0
     assert events_A[1].is_flagged == True
 
     assert events_A[2].step == 3
-    assert events_A[2].event_type == 'CASH_OUT'
+    assert events_A[2].event_type == 'CASH_OUT_RECEIVER'
     assert events_A[2].counterparty == 'B'
     assert events_A[2].balance_before == 500.0
     assert events_A[2].balance_after == 700.0
@@ -71,7 +71,7 @@ def test_annotate_events():
 
 def test_generate_narrative():
     events = [
-        TimelineEvent(1, 'CASH_IN', 1000.0, 'B', 0.0, 1000.0, "", False),
+        TimelineEvent(1, 'CASH_IN_SENDER', 1000.0, 'B', 0.0, 1000.0, "", False),
         TimelineEvent(2, 'TRANSFER', 1000.0, 'C', 1000.0, 0.0, "", True)
     ]
     findings = [{"pattern": "rapid_drain", "step_start": 1, "step_end": 2}]
@@ -86,14 +86,14 @@ def test_generate_narrative():
 
 def test_to_dict_list():
     events = [
-        TimelineEvent(1, 'CASH_IN', 1000.0, 'B', 0.0, 1000.0, "Test", False)
+        TimelineEvent(1, 'CASH_IN_SENDER', 1000.0, 'B', 0.0, 1000.0, "Test", False)
     ]
     reconstructor = TimelineReconstructor()
     dicts = reconstructor.to_dict_list(events)
 
     assert len(dicts) == 1
     assert dicts[0]['step'] == 1
-    assert dicts[0]['event_type'] == 'CASH_IN'
+    assert dicts[0]['event_type'] == 'CASH_IN_SENDER'
     assert dicts[0]['amount'] == 1000.0
     assert dicts[0]['counterparty'] == 'B'
     assert dicts[0]['balance_before'] == 0.0

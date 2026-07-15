@@ -43,7 +43,8 @@ class TimelineReconstructor:
                 balance_before = float(row['receiver_balance_before'])
                 balance_after = float(row['receiver_balance_after'])
 
-            event_type = str(row['tx_type'])
+            base_type = str(row['tx_type'])
+            event_type = f"{base_type}_SENDER" if is_sender else f"{base_type}_RECEIVER"
 
             # Additional safety check for nan/null in bool flags
             is_flagged = bool(row.get('is_flagged', False))
@@ -83,7 +84,7 @@ class TimelineReconstructor:
             if event.balance_after < 0.01 * event.balance_before:
                 annotations.append("[ACCOUNT DRAINED]")
 
-            if event.event_type == 'TRANSFER' and event.is_flagged:
+            if 'TRANSFER' in event.event_type and event.is_flagged:
                 annotations.append("[FLAGGED BY PAYSIM]")
 
             # Deduplicate annotations and keep order
