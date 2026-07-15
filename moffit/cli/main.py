@@ -9,7 +9,7 @@ from typing import Optional
 from moffit.custody.case_db import CaseManager
 from moffit.ingestion.paysim_loader import PaySimLoader
 from moffit.detection.pattern_detector import FraudPatternDetector
-from moffit.timeline.generator import TimelineGenerator
+from moffit.timeline.reconstructor import TimelineReconstructor
 
 app = typer.Typer(help="MOFFIT (Mobile Money Fraud Forensic Investigation Toolkit) CLI")
 case_app = typer.Typer(help="Manage investigation cases")
@@ -251,12 +251,34 @@ def timeline(
         case_id (str): The UUID of the case.
         account (str): The account ID to generate the timeline for.
     """
-    # manager = get_case_manager()
-    # In a real app we'd get df and findings for this case
-    import pandas as pd
-    dummy_df = pd.DataFrame()
-    generator = TimelineGenerator(dummy_df, findings=[])
-    events = generator.generate(account_id=account)
+    manager = get_case_manager()
+    evidence_items = manager.get_evidence(case_id)
+    csv_paths = [e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")]
+    if not csv_paths:
+        console.print("[red]No CSV evidence registered for this case. Run 'moffit ingest' first.[/red]")
+        raise typer.Exit(1)
+
+    loader = PaySimLoader()
+    try:
+        df = loader.normalize(loader.load_csv(csv_paths[0]))
+    except Exception as e:
+        console.print(f"[red]Failed to load CSV evidence: {str(e)}[/red]")
+        raise typer.Exit(1)
+
+    db_findings = manager.get_findings(case_id)
+    findings_dicts = []
+    for f in db_findings:
+        findings_dicts.append({
+            "pattern": f.finding_type,
+            "step_start": f.step_start,
+            "step_end": f.step_end,
+        })
+
+    reconstructor = TimelineReconstructor()
+    timeline_events = reconstructor.build_account_timeline(df, account_id=account)
+    timeline_events = reconstructor.annotate_events(timeline_events, findings_dicts)
+
+    events_dicts = reconstructor.to_dict_list(timeline_events)
 
     table = Table(title=f"Transaction Timeline: {account}")
     table.add_column("Step", justify="right", style="cyan")
@@ -266,10 +288,10 @@ def timeline(
     table.add_column("Balance After", justify="right")
     table.add_column("Annotation", style="yellow")
 
-    for e in events:
+    for e in events_dicts:
         table.add_row(
             str(e["step"]),
-            e["type"],
+            e["event_type"],
             f"{e['amount']:.2f}",
             f"{e['balance_before']:.2f}",
             f"{e['balance_after']:.2f}",
