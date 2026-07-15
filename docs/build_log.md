@@ -61,3 +61,17 @@
 - Timeline smoke test on TEST-500K, account C1000022742: correct chronology,
   [RAPID DRAIN][ACCOUNT DRAINED] annotations, coherent auto-narrative. Pipeline
   stages 1-3 (ingest -> analyze -> timeline) verified end-to-end on real data.
+  ## 2026-07-15
+- Merged PR #9 (PDF report generator) — Jules wired the CLI correctly this time
+  (integration note in issue text credited). All tests passing.
+- First complete forensic report generated: reports/TEST-500K.pdf. All 8 spec
+  sections present: cover, exec summary, methodology (Lopez-Rojas cited),
+  evidence integrity (SHA-256/MD5), findings capped top-100-of-309,607,
+  annotated timelines, custody manifest + manifest hash, HMAC signature.
+- ALL THREE SUCCESS CRITERIA MET: detection 99.7% (>=90%), runtime ~70s/100K
+  (<5min/100K), ISO/IEC 27037 report fields complete. Core toolkit (issues
+  #1-#9) finished ahead of 3-week schedule.
+- Report audit findings for polish pass: findings table tie-breaking (rank by
+  amount within equal confidence), exec summary should narrate top account by
+  amount (currently arbitrary first finding), exclude DATASET pseudo-account
+  from timelines section, header spacing.
