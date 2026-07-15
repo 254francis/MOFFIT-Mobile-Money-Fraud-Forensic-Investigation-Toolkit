@@ -252,56 +252,37 @@ def timeline(
         account (str): The account ID to generate the timeline for.
     """
 
-    # manager = get_case_manager()
-    # In a real app we'd get df and findings for this case
-
-
     manager = get_case_manager()
     evidence_items = manager.get_evidence(case_id)
     csv_paths = [e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")]
     if not csv_paths:
-        console.print("[red]No CSV evidence registered for this case. Run 'moffit ingest' first.[/red]")
-        raise typer.Exit(1)
-
-
+            console.print("[red]No CSV evidence registered for this case. Run 'moffit ingest' first.[/red]")
+            raise typer.Exit(1)
 
     loader = PaySimLoader()
     try:
-        df = loader.normalize(loader.load_csv(csv_paths[0]))
+            df = loader.normalize(loader.load_csv(csv_paths[0]))
     except Exception as e:
-        console.print(f"[red]Failed to load CSV evidence: {str(e)}[/red]")
-        raise typer.Exit(1)
+            console.print(f"[red]Failed to load CSV evidence: {str(e)}[/red]")
+            raise typer.Exit(1)
 
-    db_findings = manager.get_findings(case_id)
-    findings_dicts = []
-    for f in db_findings:
-        findings_dicts.append({
-            "pattern": f.finding_type,
-            "step_start": f.step_start,
-            "step_end": f.step_end,
-        })
+        # Findings for THIS account only: annotate_events matches by step range,
+        # so unfiltered findings would cross-contaminate annotations (and loop
+        # over the full findings table per event).
+    findings_dicts = [
+            {"pattern": f.finding_type, "step_start": f.step_start, "step_end": f.step_end}
+            for f in manager.get_findings(case_id)
+            if account in (f.account_ids or [])
+        ]
 
     reconstructor = TimelineReconstructor()
-    timeline_events = reconstructor.build_account_timeline(df, account_id=account)
-    timeline_events = reconstructor.annotate_events(timeline_events, findings_dicts)
+    events = reconstructor.build_account_timeline(df, account_id=account)
+    events = reconstructor.annotate_events(events, findings_dicts)
 
-    events_dicts = reconstructor.to_dict_list(timeline_events)
+    if not events:
+            console.print(f"[yellow]No transactions found for account {account} in this case's evidence.[/yellow]")
+            raise typer.Exit(0)
 
-
-    loader = PaySimLoader()
-    df = loader.normalize(loader.load_csv(csv_paths[0]))
-
-    recon = TimelineReconstructor()
-    events = recon.build_account_timeline(df, account)
-
-    # Findings for THIS account only (annotate_events matches by step range,
-    # so unfiltered findings would cross-contaminate annotations)
-    findings = [
-        {"pattern": f.finding_type, "step_start": f.step_start, "step_end": f.step_end}
-        for f in manager.get_findings(case_id)
-        if account in (f.account_ids or [])
-    ]
-    events = recon.annotate_events(events, findings)
     table = Table(title=f"Transaction Timeline: {account}")
     table.add_column("Step", justify="right", style="cyan")
     table.add_column("Type", style="magenta")
@@ -310,17 +291,20 @@ def timeline(
     table.add_column("Balance After", justify="right")
     table.add_column("Annotation", style="yellow")
 
-    for e in events_dicts:
-        table.add_row(
-            str(e["step"]),
-            e["event_type"],
-            f"{e['amount']:.2f}",
-            f"{e['balance_before']:.2f}",
-            f"{e['balance_after']:.2f}",
-            e["annotation"]
-        )
+    for e in events:
+            table.add_row(
+                str(e.step),
+                e.event_type,
+                f"{e.amount:.2f}",
+                f"{e.balance_before:.2f}",
+                f"{e.balance_after:.2f}",
+                e.annotation,
+            )
 
     console.print(table)
+
+    narrative = reconstructor.generate_narrative(events, account, findings_dicts)
+    console.print(Panel.fit(narrative, title="Narrative", border_style="blue"))
 
 @app.command()
 def report(
