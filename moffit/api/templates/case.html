@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}Case: {{ summary.case.name }}{% endblock %}
+
+{% block head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem;">
+    <h1>{{ summary.case.name }}</h1>
+    <p><strong>Investigator:</strong> {{ summary.case.investigator }} | <strong>Status:</strong> {{ summary.case.status }} | <strong>Created:</strong> {{ summary.case.created_at }}</p>
+    <p>{{ summary.case.description }}</p>
+</div>
+
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem;">
+    <!-- Left Column: Findings -->
+    <div>
+        <h2>Findings ({{ summary.findings_count }} total)</h2>
+        {% if summary.findings_count > 0 %}
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem;">
+            <div>
+                <canvas id="severityChart"></canvas>
+            </div>
+            <div>
+                <canvas id="patternChart"></canvas>
+            </div>
+        </div>
+
+        <h3>Top Findings (Capped at 100)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Severity</th>
+                    <th>Pattern</th>
+                    <th>Account</th>
+                    <th>Confidence</th>
+                    <th>Amount</th>
+                    <th>Steps</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for finding in top_findings %}
+                <tr>
+                    <td>
+                        <span class="badge badge-{{ finding.severity }}">{{ finding.severity | capitalize }}</span>
+                    </td>
+                    <td>{{ finding.finding_type }}</td>
+                    <td>
+                        {% if finding.account_ids and finding.account_ids|length > 0 %}
+                            {% set account = finding.account_ids[0] %}
+                            {% if account != 'DATASET' %}
+                                <a href="/case/{{ summary.case.id }}/timeline/{{ account }}">{{ account }}</a>
+                            {% else %}
+                                DATASET
+                            {% endif %}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
+                    <td>{{ "%.0f"|format(finding.confidence * 100) }}%</td>
+                    <td>{{ "%.2f"|format(finding.amount|default(0)) }}</td>
+                    <td>{{ finding.step_start }} - {{ finding.step_end }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No findings available. Run analysis on evidence to generate findings.</p>
+        {% endif %}
+    </div>
+
+    <!-- Right Column: Evidence and Actions -->
+    <div>
+        <div style="background-color: #f8f9fa; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+            <h2>Actions</h2>
+
+            <div id="analyze-section" style="margin-bottom: 1rem;">
+                <button id="analyze-btn" class="btn btn-primary" onclick="startAnalysis()" style="width: 100%; margin-bottom: 0.5rem;" {% if is_analyzing %}disabled{% endif %}>
+                    {% if is_analyzing %}Analyzing...{% else %}Analyze Evidence{% endif %}
+                </button>
+                <div id="analysis-status" style="font-size: 0.9rem; color: #6c757d; text-align: center;">
+                    {% if is_analyzing %}Analysis in progress. Please wait...{% endif %}
+                </div>
+            </div>
+
+            <a href="/case/{{ summary.case.id }}/report" class="btn btn-secondary" style="width: 100%; box-sizing: border-box; text-align: center;">Download Forensic Report</a>
+        </div>
+
+        <div style="background-color: #f8f9fa; padding: 1.5rem; border-radius: 8px;">
+            <h2>Evidence</h2>
+            {% if evidence %}
+            <ul style="list-style-type: none; padding: 0;">
+                {% for item in evidence %}
+                <li style="margin-bottom: 1rem; border-bottom: 1px solid #ddd; padding-bottom: 1rem;">
+                    <strong>File:</strong> {{ item.filename.split('/')[-1] }}<br>
+                    <strong>Size:</strong> {{ (item.file_size / 1024 / 1024)|round(2) }} MB<br>
+                    <strong>SHA-256:</strong> <span style="font-family: monospace; font-size: 0.8rem;">{{ item.sha256_hash[:16] }}...</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p>No evidence added. Use the CLI to register evidence.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    {% if summary.findings_count > 0 %}
+    // Severity Chart
+    const ctxSev = document.getElementById('severityChart').getContext('2d');
+    new Chart(ctxSev, {
+        type: 'bar',
+        data: {
+            labels: ['High', 'Medium', 'Low'],
+            datasets: [{
+                label: 'Findings by Severity',
+                data: [
+                    {{ summary.findings_by_severity.get('high', 0) }},
+                    {{ summary.findings_by_severity.get('medium', 0) }},
+                    {{ summary.findings_by_severity.get('low', 0) }}
+                ],
+                backgroundColor: ['#dc3545', '#ffc107', '#28a745']
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    // Pattern Chart
+    const ctxPat = document.getElementById('patternChart').getContext('2d');
+    new Chart(ctxPat, {
+        type: 'bar',
+        data: {
+            labels: {{ pattern_labels | tojson }},
+            datasets: [{
+                label: 'Findings by Pattern',
+                data: {{ pattern_counts | tojson }},
+                backgroundColor: '#007bff'
+            }]
+        },
+        options: {
+            plugins: { legend: { display: false } }
+        }
+    });
+    {% endif %}
+
+    let pollingInterval = null;
+
+    function startAnalysis() {
+        const btn = document.getElementById('analyze-btn');
+        const status = document.getElementById('analysis-status');
+
+        btn.disabled = true;
+        btn.innerText = 'Analyzing...';
+        status.innerText = 'Analysis in progress. Please wait...';
+
+        fetch('/case/{{ summary.case.id }}/analyze', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if(data.status === 'started') {
+                    startPolling();
+                } else {
+                    btn.disabled = false;
+                    btn.innerText = 'Analyze Evidence';
+                    status.innerText = 'Analysis failed to start.';
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerText = 'Analyze Evidence';
+                status.innerText = 'Error starting analysis.';
+            });
+    }
+
+    function startPolling() {
+        if (pollingInterval) return;
+        pollingInterval = setInterval(checkStatus, 5000);
+    }
+
+    function checkStatus() {
+        fetch('/case/{{ summary.case.id }}/status')
+            .then(res => res.json())
+            .then(data => {
+                if (!data.analyzing) {
+                    clearInterval(pollingInterval);
+                    pollingInterval = null;
+                    document.getElementById('analysis-status').innerText = 'Analysis complete. Refreshing...';
+                    setTimeout(() => window.location.reload(), 1000);
+                }
+            })
+            .catch(err => console.error("Polling error", err));
+    }
+
+    // Auto-start polling if already analyzing on page load
+    {% if is_analyzing %}
+    startPolling();
+    {% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}MOFFIT - Cases{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <h1>Cases</h1>
+    <button class="btn btn-success" onclick="document.getElementById('createCaseModal').style.display='block'">+ New Case</button>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
+    {% for summary in case_summaries %}
+    <div style="border: 1px solid #ddd; border-radius: 8px; padding: 1.5rem; background-color: #fff;">
+        <h2 style="margin-top: 0;"><a href="/case/{{ summary.case.id }}" style="text-decoration: none; color: #007bff;">{{ summary.case.name }}</a></h2>
+        <p><strong>Investigator:</strong> {{ summary.case.investigator }}</p>
+        <p><strong>Status:</strong> {{ summary.case.status }}</p>
+
+        <div style="margin-top: 1rem;">
+            <strong>Findings:</strong> {{ summary.findings_count }}
+            <div style="margin-top: 0.5rem;">
+                <span class="badge badge-high">High: {{ summary.findings_by_severity.get('high', 0) }}</span>
+                <span class="badge badge-medium">Med: {{ summary.findings_by_severity.get('medium', 0) }}</span>
+                <span class="badge badge-low">Low: {{ summary.findings_by_severity.get('low', 0) }}</span>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <p>No cases found.</p>
+    {% endfor %}
+</div>
+
+<!-- Modal for creating case -->
+<div id="createCaseModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div style="background-color: white; padding: 2rem; border-radius: 8px; width: 400px; margin: 10% auto;">
+        <h2>Create New Case</h2>
+        <form action="/case" method="post">
+            <div style="margin-bottom: 1rem;">
+                <label for="name" style="display: block; margin-bottom: 0.5rem;">Name</label>
+                <input type="text" id="name" name="name" required style="width: 100%; padding: 8px; box-sizing: border-box;">
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label for="investigator" style="display: block; margin-bottom: 0.5rem;">Investigator</label>
+                <input type="text" id="investigator" name="investigator" required style="width: 100%; padding: 8px; box-sizing: border-box;">
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label for="description" style="display: block; margin-bottom: 0.5rem;">Description</label>
+                <textarea id="description" name="description" rows="3" style="width: 100%; padding: 8px; box-sizing: border-box;"></textarea>
+            </div>
+            <div style="text-align: right;">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('createCaseModal').style.display='none'">Cancel</button>
+                <button type="submit" class="btn btn-success">Create</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

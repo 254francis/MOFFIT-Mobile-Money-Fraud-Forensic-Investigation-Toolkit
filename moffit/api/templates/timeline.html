@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Timeline - {{ account_id }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem;">
+    <h1>Timeline for Account: {{ account_id }}</h1>
+    <a href="/case/{{ case_id }}">← Back to Case</a>
+</div>
+
+<div style="display: grid; grid-template-columns: 3fr 1fr; gap: 2rem;">
+    <!-- Left Column: Events Table -->
+    <div>
+        <h2>Event Sequence</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Step</th>
+                    <th>Type</th>
+                    <th>Counterparty</th>
+                    <th>Amount (KES)</th>
+                    <th>Bal Before</th>
+                    <th>Bal After</th>
+                    <th>Annotations</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in events %}
+                <tr style="{% if event.is_flagged %}background-color: #fff3cd;{% endif %}">
+                    <td>{{ event.step }}</td>
+                    <td>{{ event.event_type }}</td>
+                    <td>{{ event.counterparty }}</td>
+                    <td>{{ "%.2f"|format(event.amount) }}</td>
+                    <td>{{ "%.2f"|format(event.balance_before) }}</td>
+                    <td>{{ "%.2f"|format(event.balance_after) }}</td>
+                    <td>
+                        {% if event.annotation %}
+                            <strong style="color: #dc3545;">{{ event.annotation }}</strong>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7">No events found for this account.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Right Column: Narrative Panel -->
+    <div>
+        <div style="background-color: #e9ecef; padding: 1.5rem; border-radius: 8px;">
+            <h2>Investigation Narrative</h2>
+            <p style="line-height: 1.6;">{{ narrative }}</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
