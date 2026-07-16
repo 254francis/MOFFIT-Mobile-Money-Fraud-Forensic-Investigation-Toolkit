@@ -13,18 +13,15 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
-    # Setup
+    # Setup: release the engine's file handle BEFORE deleting (Windows locks open files)
+    manager.engine.dispose()
     if os.path.exists(test_db_path):
         os.remove(test_db_path)
-    # the sqlite engine needs to be recreated if the file was deleted
-    manager.engine.dispose()
-
     # Re-initialize DB tables for clean slate
     Base.metadata.create_all(manager.engine)
-
     yield
-
     # Teardown
+    manager.engine.dispose()
     if os.path.exists(test_db_path):
         os.remove(test_db_path)
 
