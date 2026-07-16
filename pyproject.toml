@@ -19,7 +19,10 @@ dependencies = [
     "typer",
     "python-dotenv",
     "pytest",
-    "httpx"
+    "httpx",
+    "uvicorn",
+    "jinja2",
+    "python-multipart"
 ]
 
 [project.scripts]
