@@ -4,3 +4,5 @@ venv/
 data/samples/*.csv
 *.db
 .envreports/
+reports/
+*.joblib
