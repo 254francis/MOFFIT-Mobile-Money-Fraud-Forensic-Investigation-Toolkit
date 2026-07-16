@@ -75,3 +75,31 @@
   amount within equal confidence), exec summary should narrate top account by
   amount (currently arbitrary first finding), exclude DATASET pseudo-account
   from timelines section, header spacing.
+  ## 2026-07-16
+- Merged PR #10 (FastAPI dashboard) and PR #11 (ML classification module).
+  pyproject.toml dependency conflict between the two resolved by union.
+- Review #6: API test fixture failed on Windows (PermissionError —
+  os.remove before engine.dispose; SQLite file still locked). Reordered dispose
+  before removal in setup and teardown. Cross-platform defect: passes on Linux
+  , fails on Windows.
+- Full suite: 38/38 passing. ALL 11 ISSUES BUILT, MERGED, VERIFIED.
+- Review #7: web report route called nonexistent generate_report() (real method:
+  generate()) and reloaded the full CSV once per flagged account (~116K loads —
+  unusable). Fixed: aligned signature, single CSV load, capped timelines at 5
+  accounts, wired generate_narrative into exec summary.
+- Review #8: web and CLI layers maintained separate case databases (API:
+  MOFFIT_DB -> moffit.db; CLI: CASE_DB_PATH -> cases.db). Split-brain discovered
+  when CLI ingest failed against a web-created case. Unified on CASE_DB_PATH
+  resolution; updated API test env var; deleted orphan DBs.
+- Review #9: analysis background task called nonexistent detect_all() and passed
+  raw detector dicts to add_findings_bulk (schema mismatch). Aligned with
+  detector.analyze() + severity-mapping payload (mirrors CLI implementation).
+- Full web round-trip verified: web-created case -> CLI ingest -> web analyze
+  (309,607 findings, ~2min background task) -> web report download.
+- Reproducibility check: same evidence analyzed in two cases via two interfaces
+  two days apart produced identical findings (309,607, same top-100, same
+  timelines), identical evidence SHA-256; case-specific HMAC signatures and
+  timestamps correctly differed. Deterministic analysis + per-case custody
+  separation demonstrated.
+- SYSTEM COMPLETE: CLI + web dashboard + ML triage, one shared database,
+  38/38 tests, all success criteria passed.
