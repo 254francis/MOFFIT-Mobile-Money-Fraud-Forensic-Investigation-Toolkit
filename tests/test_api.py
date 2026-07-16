@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 # We need to override the DB path for testing before importing the app
 test_db_path = "test_api_moffit.db"
-os.environ["MOFFIT_DB"] = test_db_path
+os.environ["CASE_DB_PATH"] = test_db_path
 
 from moffit.api.main import app, manager
 from moffit.custody.case_db import Base

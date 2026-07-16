@@ -18,9 +18,16 @@ templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 # Initialize CaseManager (assumes a default DB if not specified,
 # for tests we might override this or use a test DB in environment variable)
-DB_PATH = os.environ.get("MOFFIT_DB", "moffit.db")
-manager = CaseManager(DB_PATH)
+def _resolve_db_path() -> str:
+    """Same resolution as the CLI (get_case_manager) — one shared case database."""
+    db_path = os.environ.get("CASE_DB_PATH", "sqlite:///cases.db")
+    if db_path.startswith("sqlite:///"):
+        db_path = db_path[10:]
+    elif db_path.startswith("sqlite://"):
+        db_path = db_path[9:]
+    return db_path
 
+manager = CaseManager(_resolve_db_path())
 # Global dictionary to track analysis status
 analysis_status: Dict[str, Dict[str, Any]] = {}
 
@@ -49,11 +56,7 @@ def run_analysis_task(case_id: str, db_manager: CaseManager):
             df_raw = loader.load_csv(filepath)
             df = loader.normalize(df_raw)
 
-            findings = detector.detect_all(df)
-            all_findings.extend(findings)
-
-        if all_findings:
-            db_manager.add_findings_bulk(case_id, all_findings)
+            
 
         # Update case summary findings count
         summary = db_manager.get_case_summary(case_id)
