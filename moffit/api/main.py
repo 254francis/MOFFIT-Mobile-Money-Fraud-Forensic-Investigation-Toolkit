@@ -225,31 +225,43 @@ async def generate_report(id: str):
 
     timeline_map = {}
 
-    # Gather timelines for high severity accounts
-    for acc in accounts_to_timeline:
-        acct_events = []
-        acct_findings = [fd for fd in findings_dicts if acc in fd['account_ids']]
-        for ev in evidence:
-            filepath = ev.filename
-            if os.path.exists(filepath):
-                df_raw = loader.load_csv(filepath)
-                df = loader.normalize(df_raw)
-                events = reconstructor.build_account_timeline(df, acc)
-                annotated = reconstructor.annotate_events(events, acct_findings)
-                acct_events.extend(reconstructor.to_dict_list(annotated))
-        if acct_events:
-            timeline_map[acc] = acct_events
+    # Cap timelines: top accounts by finding amount-relevance (report is capped
+    # at top-100 findings anyway; timelines for a handful of accounts suffice).
+    MAX_TIMELINE_ACCOUNTS = 5
+    top_accounts = list(accounts_to_timeline)[:MAX_TIMELINE_ACCOUNTS]
 
-    # Generate narrative
+    # Load evidence CSV ONCE, reuse for all accounts
+    df = None
+    for ev in evidence:
+        if os.path.exists(ev.filename) and str(ev.filename).lower().endswith(".csv"):
+            df = loader.normalize(loader.load_csv(ev.filename))
+            break
+
+    if df is not None:
+        for acc in top_accounts:
+            acct_findings = [fd for fd in findings_dicts if acc in fd["account_ids"]]
+            events = reconstructor.build_account_timeline(df, acc)
+            annotated = reconstructor.annotate_events(events, acct_findings)
+            if annotated:
+                timeline_map[acc] = reconstructor.to_dict_list(annotated)
+
+    # Narrative: use the reconstructor's generator for the first timeline account,
+    # falling back to a generic line for cases with no timelines.
     overall_narrative = f"This report covers the forensic investigation of case '{summary['case']['name']}'."
+    if timeline_map and df is not None:
+        first_acc = next(iter(timeline_map))
+        acct_findings = [fd for fd in findings_dicts if first_acc in fd["account_ids"]]
+        events = reconstructor.build_account_timeline(df, first_acc)
+        events = reconstructor.annotate_events(events, acct_findings)
+        overall_narrative = reconstructor.generate_narrative(events, first_acc, acct_findings)
 
-    generator.generate_report(
+    generator.generate(
         case=summary["case"],
         findings=findings_dicts,
-        custody=custody,
         timeline_map=timeline_map,
+        custody=custody,
+        narrative=overall_narrative,
         output_path=report_path,
-        narrative=overall_narrative
     )
 
-    return FileResponse(path=report_path, filename=f"MOFFIT_Report_{summary['case']['name']}.pdf", media_type="application/pdf")
+    return FileResponse(report_path, media_type="application/pdf", filename=f"MOFFIT_report_{id}.pdf")
