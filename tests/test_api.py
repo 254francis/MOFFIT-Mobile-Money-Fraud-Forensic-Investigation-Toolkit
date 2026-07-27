@@ -68,3 +68,28 @@ def test_get_case_status_returns_json():
     assert "findings_count" in data
     assert data["analyzing"] is False
     assert data["findings_count"] == 0
+
+def test_get_findings_html_returns_fragment():
+    # First create a case
+    case = manager.create_case("Findings Test", "Desc", "Inv")
+
+    # Add some findings
+    manager.add_finding(case.id, "Pattern A", "high", "Desc", ["A"], 1, 2, 0.9)
+    manager.add_finding(case.id, "Pattern B", "low", "Desc", ["B"], 1, 2, 0.4)
+
+    # GET /case/{id}/findings?page=1
+    response = client.get(f"/case/{case.id}/findings?page=1")
+    assert response.status_code == 200
+    assert "Pattern A" in response.text
+    assert "Pattern B" in response.text
+    assert "id=\"findings-table-container\"" in response.text
+
+def test_get_findings_html_respects_severity():
+    case = manager.create_case("Severity Test", "Desc", "Inv")
+    manager.add_finding(case.id, "Pattern A", "high", "Desc", ["A"], 1, 2, 0.9)
+    manager.add_finding(case.id, "Pattern B", "low", "Desc", ["B"], 1, 2, 0.4)
+
+    response = client.get(f"/case/{case.id}/findings?page=1&severity=high")
+    assert response.status_code == 200
+    assert "Pattern A" in response.text
+    assert "<td>Pattern B</td>" not in response.text

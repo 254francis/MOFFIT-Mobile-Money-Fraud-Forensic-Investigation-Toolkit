@@ -1,0 +1,81 @@
+<div id="findings-table-container">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div>
+            <label for="severity">Severity: </label>
+            <select name="severity" hx-get="/case/{{ case_id }}/findings" hx-target="#findings-table-container" hx-swap="outerHTML" hx-include="[name='pattern']">
+                <option value="ALL" {% if severity_filter == 'ALL' %}selected{% endif %}>All</option>
+                <option value="HIGH" {% if severity_filter == 'HIGH' %}selected{% endif %}>High</option>
+                <option value="MEDIUM" {% if severity_filter == 'MEDIUM' %}selected{% endif %}>Medium</option>
+                <option value="LOW" {% if severity_filter == 'LOW' %}selected{% endif %}>Low</option>
+            </select>
+
+            <label for="pattern" style="margin-left: 1rem;">Pattern: </label>
+            <select name="pattern" hx-get="/case/{{ case_id }}/findings" hx-target="#findings-table-container" hx-swap="outerHTML" hx-include="[name='severity']">
+                <option value="ALL" {% if pattern_filter == 'ALL' %}selected{% endif %}>All Patterns</option>
+                {% if unique_patterns %}
+                    {% for p in unique_patterns %}
+                        <option value="{{ p }}" {% if pattern_filter == p %}selected{% endif %}>{{ p }}</option>
+                    {% endfor %}
+                {% endif %}
+            </select>
+
+            <input type="hidden" name="page" value="1">
+        </div>
+        <div>
+            <span>Page {{ page }} of {{ total_pages }} ({{ total_count }} total)</span>
+            <button class="btn btn-secondary"
+                hx-get="/case/{{ case_id }}/findings?page={{ page - 1 }}"
+                hx-target="#findings-table-container" hx-swap="outerHTML"
+                hx-include="[name='severity'], [name='pattern']"
+                {% if page <= 1 %}disabled{% endif %}>Prev</button>
+            <button class="btn btn-secondary"
+                hx-get="/case/{{ case_id }}/findings?page={{ page + 1 }}"
+                hx-target="#findings-table-container" hx-swap="outerHTML"
+                hx-include="[name='severity'], [name='pattern']"
+                {% if page >= total_pages %}disabled{% endif %}>Next</button>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Severity</th>
+                <th>Pattern</th>
+                <th>Account</th>
+                <th>Confidence</th>
+                <th>Amount</th>
+                <th>Steps</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for finding in findings %}
+            <tr>
+                <td>
+                    <span class="badge badge-{{ finding.severity }}">{{ finding.severity | capitalize }}</span>
+                </td>
+                <td>{{ finding.finding_type }}</td>
+                <td>
+                    {% if finding.account_ids and finding.account_ids|length > 0 %}
+                        {% set account = finding.account_ids[0] %}
+                        {% if account != 'DATASET' %}
+                            <a href="/case/{{ case_id }}/timeline/{{ account }}">{{ account }}</a>
+                        {% else %}
+                            DATASET
+                        {% endif %}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                <td>{{ "%.0f"|format(finding.confidence * 100) }}%</td>
+                <td>{{ "%.2f"|format(finding.amount|default(0)) }}</td>
+                <td>{{ finding.step_start }} - {{ finding.step_end }}</td>
+            </tr>
+            {% endfor %}
+            {% if findings|length == 0 %}
+            <tr>
+                <td colspan="6" style="text-align: center;">No findings match the current filters.</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>

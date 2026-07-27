@@ -1,6 +1,6 @@
 import os
 from typing import Dict, Any, List
-from fastapi import FastAPI, Request, Form, BackgroundTasks
+from fastapi import FastAPI, Request, Form, BackgroundTasks, Response
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 
@@ -138,6 +138,58 @@ async def case_status(id: str):
         summary = manager.get_case_summary(id)
         return {"analyzing": False, "findings_count": summary.get("findings_count", 0)}
     return status
+
+@app.get("/case/{id}/findings", response_class=HTMLResponse)
+async def get_findings_html(
+    request: Request,
+    id: str,
+    page: int = 1,
+    severity: str = "ALL",
+    pattern: str = "ALL"
+):
+    page_size = 50
+    offset = (page - 1) * page_size
+
+    findings, total_count = manager.get_paginated_findings(
+        case_id=id,
+        limit=page_size,
+        offset=offset,
+        severity=severity if severity != "ALL" else None,
+        pattern=pattern if pattern != "ALL" else None
+    )
+
+    total_pages = (total_count + page_size - 1) // page_size
+    if total_pages == 0:
+        total_pages = 1
+
+    pattern_counts_dict = manager.get_finding_patterns(id)
+    unique_patterns = list(pattern_counts_dict.keys())
+
+    return templates.TemplateResponse(
+        request=request, name="_findings_rows.html", context={
+            "findings": findings,
+            "case_id": id,
+            "page": page,
+            "total_pages": total_pages,
+            "total_count": total_count,
+            "severity_filter": severity,
+            "pattern_filter": pattern,
+            "unique_patterns": unique_patterns
+        }
+    )
+
+@app.get("/case/{id}/status_html", response_class=HTMLResponse)
+async def case_status_html(request: Request, id: str, response: Response):
+    status = analysis_status.get(id)
+    if not status:
+        summary = manager.get_case_summary(id)
+        status = {"analyzing": False, "findings_count": summary.get("findings_count", 0)}
+
+    if not status.get("analyzing", False):
+        response.headers["HX-Trigger"] = "stopPolling, refreshPage"
+        return "Analysis complete. Refreshing..."
+
+    return "Analysis in progress. Please wait..."
 
 @app.get("/case/{id}/timeline/{account}", response_class=HTMLResponse)
 async def case_timeline(request: Request, id: str, account: str):
