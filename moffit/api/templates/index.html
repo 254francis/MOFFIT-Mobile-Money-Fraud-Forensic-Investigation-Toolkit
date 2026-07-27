@@ -5,28 +5,19 @@
 {% block content %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
     <h1>Cases</h1>
-    <button class="btn btn-success" onclick="document.getElementById('createCaseModal').style.display='block'">+ New Case</button>
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <input class="form-control" type="search"
+               name="q" placeholder="Search cases..."
+               hx-get="/"
+               hx-trigger="input changed delay:500ms, search"
+               hx-target="#case-list"
+               style="padding: 8px; border-radius: 4px; border: 1px solid #ccc; width: 250px;">
+        <button class="btn btn-success" onclick="document.getElementById('createCaseModal').style.display='block'">+ New Case</button>
+    </div>
 </div>
 
-<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
-    {% for summary in case_summaries %}
-    <div style="border: 1px solid #ddd; border-radius: 8px; padding: 1.5rem; background-color: #fff;">
-        <h2 style="margin-top: 0;"><a href="/case/{{ summary.case.id }}" style="text-decoration: none; color: #007bff;">{{ summary.case.name }}</a></h2>
-        <p><strong>Investigator:</strong> {{ summary.case.investigator }}</p>
-        <p><strong>Status:</strong> {{ summary.case.status }}</p>
-
-        <div style="margin-top: 1rem;">
-            <strong>Findings:</strong> {{ summary.findings_count }}
-            <div style="margin-top: 0.5rem;">
-                <span class="badge badge-high">High: {{ summary.findings_by_severity.get('high', 0) }}</span>
-                <span class="badge badge-medium">Med: {{ summary.findings_by_severity.get('medium', 0) }}</span>
-                <span class="badge badge-low">Low: {{ summary.findings_by_severity.get('low', 0) }}</span>
-            </div>
-        </div>
-    </div>
-    {% else %}
-    <p>No cases found.</p>
-    {% endfor %}
+<div id="case-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
+    {% include "case_list_fragment.html" %}
 </div>
 
 <!-- Modal for creating case -->

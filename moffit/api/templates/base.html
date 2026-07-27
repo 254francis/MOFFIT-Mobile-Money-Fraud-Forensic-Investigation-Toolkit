@@ -88,12 +88,36 @@
         .badge-high { background-color: #dc3545; }
         .badge-medium { background-color: #ffc107; color: black; }
         .badge-low { background-color: #28a745; }
+        .spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            vertical-align: middle;
+            margin-right: 0.5rem;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
     {% block head %}{% endblock %}
 </head>
 <body>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <header>
-        <a href="/">MOFFIT Dashboard</a>
+        <div style="display: flex; gap: 10px; font-weight: bold; font-size: 1.2rem;">
+            <a href="/">Home</a>
+            {% if summary and summary.case %}
+            <span>|</span>
+            <a href="/case/{{ summary.case.id }}">{{ summary.case.name }}</a>
+            {% elif case_id %}
+            <span>|</span>
+            <a href="/case/{{ case_id }}">Case Details</a>
+            {% endif %}
+        </div>
     </header>
     <div class="container">
         <div class="content">

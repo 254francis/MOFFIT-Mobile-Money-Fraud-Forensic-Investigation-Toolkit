@@ -28,7 +28,7 @@
         </div>
 
         <h3>Top Findings (Capped at 100)</h3>
-        <table>
+        <table id="findingsTable">
             <thead>
                 <tr>
                     <th>Severity</th>
@@ -41,7 +41,7 @@
             </thead>
             <tbody>
                 {% for finding in top_findings %}
-                <tr>
+                <tr class="finding-row" style="display: none;">
                     <td>
                         <span class="badge badge-{{ finding.severity }}">{{ finding.severity | capitalize }}</span>
                     </td>
@@ -65,8 +65,17 @@
                 {% endfor %}
             </tbody>
         </table>
+
+        <div id="pagination" style="display: flex; justify-content: center; gap: 1rem; margin-top: 1rem; align-items: center;">
+            <button class="btn btn-secondary" onclick="prevPage()" id="prevBtn" disabled>Previous</button>
+            <span id="pageInfo">Page 1</span>
+            <button class="btn btn-secondary" onclick="nextPage()" id="nextBtn">Next</button>
+        </div>
         {% else %}
-        <p>No findings available. Run analysis on evidence to generate findings.</p>
+        <div style="text-align: center; padding: 3rem; background-color: #f8f9fa; border-radius: 8px; border: 1px dashed #ccc;">
+            <h2 style="color: #6c757d;">No findings yet</h2>
+            <p style="color: #6c757d;">Run analysis on your evidence to detect fraudulent patterns.</p>
+        </div>
         {% endif %}
     </div>
 
@@ -77,14 +86,17 @@
 
             <div id="analyze-section" style="margin-bottom: 1rem;">
                 <button id="analyze-btn" class="btn btn-primary" onclick="startAnalysis()" style="width: 100%; margin-bottom: 0.5rem;" {% if is_analyzing %}disabled{% endif %}>
-                    {% if is_analyzing %}Analyzing...{% else %}Analyze Evidence{% endif %}
+                    {% if is_analyzing %}<span class="spinner"></span>Analyzing...{% else %}Analyze Evidence{% endif %}
                 </button>
                 <div id="analysis-status" style="font-size: 0.9rem; color: #6c757d; text-align: center;">
                     {% if is_analyzing %}Analysis in progress. Please wait...{% endif %}
                 </div>
             </div>
 
-            <a href="/case/{{ summary.case.id }}/report" class="btn btn-secondary" style="width: 100%; box-sizing: border-box; text-align: center;">Download Forensic Report</a>
+            <div style="display: flex; gap: 0.5rem;">
+                <a href="/case/{{ summary.case.id }}/report" class="btn btn-secondary" style="flex: 1; text-align: center;">Download Report</a>
+                <a href="/case/{{ summary.case.id }}/report/preview" target="_blank" class="btn btn-secondary" style="flex: 1; text-align: center;">Preview Report</a>
+            </div>
         </div>
 
         <div style="background-color: #f8f9fa; padding: 1.5rem; border-radius: 8px;">
@@ -100,7 +112,9 @@
                 {% endfor %}
             </ul>
             {% else %}
-            <p>No evidence added. Use the CLI to register evidence.</p>
+            <div style="text-align: center; padding: 2rem; background-color: #fff; border-radius: 8px; border: 1px dashed #ccc;">
+                <p style="color: #6c757d; margin: 0;">No evidence added. Use the CLI to register evidence before analyzing.</p>
+            </div>
             {% endif %}
         </div>
     </div>
@@ -155,7 +169,7 @@
         const status = document.getElementById('analysis-status');
 
         btn.disabled = true;
-        btn.innerText = 'Analyzing...';
+        btn.innerHTML = '<span class="spinner"></span>Analyzing...';
         status.innerText = 'Analysis in progress. Please wait...';
 
         fetch('/case/{{ summary.case.id }}/analyze', { method: 'POST' })
@@ -188,8 +202,20 @@
                 if (!data.analyzing) {
                     clearInterval(pollingInterval);
                     pollingInterval = null;
-                    document.getElementById('analysis-status').innerText = 'Analysis complete. Refreshing...';
-                    setTimeout(() => window.location.reload(), 1000);
+                    const status = document.getElementById('analysis-status');
+                    const btn = document.getElementById('analyze-btn');
+                    if (data.error) {
+                        if (data.error.includes("trained") || data.error.includes("not found")) {
+                            status.innerHTML = `<span style="color: #dc3545;">Model not yet trained. Please run <code>moffit ml train</code> first.</span>`;
+                        } else {
+                            status.innerHTML = `<span style="color: #dc3545;">Analysis error: ${data.error}</span>`;
+                        }
+                        btn.disabled = false;
+                        btn.innerText = 'Analyze Evidence';
+                    } else {
+                        status.innerText = 'Analysis complete. Refreshing...';
+                        setTimeout(() => window.location.reload(), 1000);
+                    }
                 }
             })
             .catch(err => console.error("Polling error", err));
@@ -199,5 +225,89 @@
     {% if is_analyzing %}
     startPolling();
     {% endif %}
+
+    const rows = document.querySelectorAll('.finding-row');
+    const rowsPerPage = 10;
+    let currentPage = 1;
+    const totalPages = Math.ceil(rows.length / rowsPerPage) || 1;
+
+    function renderTable() {
+        rows.forEach((row, index) => {
+            if (index >= (currentPage - 1) * rowsPerPage && index < currentPage * rowsPerPage) {
+                row.style.display = 'table-row';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const pageInfo = document.getElementById('pageInfo');
+
+        if (prevBtn) prevBtn.disabled = currentPage === 1;
+        if (nextBtn) nextBtn.disabled = currentPage === totalPages || totalPages === 0;
+        if (pageInfo) pageInfo.innerText = `Page ${currentPage} of ${totalPages}`;
+    }
+
+    function prevPage() {
+        if (currentPage > 1) {
+            currentPage--;
+            renderTable();
+        }
+    }
+
+    function nextPage() {
+        if (currentPage < totalPages) {
+            currentPage++;
+            renderTable();
+        }
+    }
+
+    if (rows.length > 0) {
+        renderTable();
+    }
+
+
+    const rows = document.querySelectorAll('.finding-row');
+    const rowsPerPage = 10;
+    let currentPage = 1;
+    const totalPages = Math.ceil(rows.length / rowsPerPage) || 1;
+
+    function renderTable() {
+        rows.forEach((row, index) => {
+            if (index >= (currentPage - 1) * rowsPerPage && index < currentPage * rowsPerPage) {
+                row.style.display = 'table-row';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const pageInfo = document.getElementById('pageInfo');
+
+        if (prevBtn) prevBtn.disabled = currentPage === 1;
+        if (nextBtn) nextBtn.disabled = currentPage === totalPages || totalPages === 0;
+        if (pageInfo) pageInfo.innerText = `Page ${currentPage} of ${totalPages}`;
+    }
+
+    function prevPage() {
+        if (currentPage > 1) {
+            currentPage--;
+            renderTable();
+        }
+    }
+
+    function nextPage() {
+        if (currentPage < totalPages) {
+            currentPage++;
+            renderTable();
+        }
+    }
+
+    if (rows.length > 0) {
+        renderTable();
+    }
+
 </script>
 {% endblock %}

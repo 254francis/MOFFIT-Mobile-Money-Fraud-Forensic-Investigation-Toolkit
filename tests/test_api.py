@@ -29,7 +29,7 @@ def setup_teardown():
 def test_get_index_returns_200():
     response = client.get("/")
     assert response.status_code == 200
-    assert "MOFFIT Dashboard" in response.text
+    assert "Home" in response.text
 
 
 def test_post_case_creates_and_redirects():
@@ -68,3 +68,37 @@ def test_get_case_status_returns_json():
     assert "findings_count" in data
     assert data["analyzing"] is False
     assert data["findings_count"] == 0
+
+def test_get_report_preview_returns_200(monkeypatch):
+    # Mock the _generate_report_sync so we don't actually build a PDF during test
+    def mock_generate(*args, **kwargs):
+        # Create a dummy pdf file
+        path = "report_test.pdf"
+        with open(path, "wb") as f:
+            f.write(b"%PDF-1.4 dummy")
+        return path
+
+    import moffit.api.main
+    monkeypatch.setattr(moffit.api.main, "_generate_report_sync", mock_generate)
+
+    # First create a case
+    case = manager.create_case("Preview Test", "Desc", "Inv")
+    response = client.get(f"/case/{case.id}/report/preview")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "inline" in response.headers["content-disposition"]
+
+def test_home_search_returns_fragment():
+    # Create two cases
+    manager.create_case("Apple Case", "Desc", "Investigator A")
+    manager.create_case("Banana Case", "Desc", "Investigator B")
+
+    # Search for Apple via HTMX
+    response = client.get("/?q=apple", headers={"hx-request": "true"})
+    assert response.status_code == 200
+    assert "Apple Case" in response.text
+    assert "Banana Case" not in response.text
+
+    # It should not return the full HTML (e.g. no <html> tag)
+    assert "<html" not in response.text.lower()
