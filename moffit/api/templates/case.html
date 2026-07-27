@@ -50,7 +50,7 @@
                         {% if finding.account_ids and finding.account_ids|length > 0 %}
                             {% set account = finding.account_ids[0] %}
                             {% if account != 'DATASET' %}
-                                <a href="/case/{{ summary.case.id }}/timeline/{{ account }}">{{ account }}</a>
+                                <a href="/case/{{ summary.case.id }}/graph/{{ account }}">{{ account }}</a>
                             {% else %}
                                 DATASET
                             {% endif %}

@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Transaction Graph: {{ account_id }}{% endblock %}
+
+{% block head %}
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/dist/vis-network.min.js"></script>
+<style type="text/css">
+    #network-graph {
+        width: 100%;
+        height: 600px;
+        border: 1px solid lightgray;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+    }
+    .vis-network:focus {
+        outline: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem;">
+    <h1>Transaction Graph (Ego-Network)</h1>
+    <p>
+        <strong>Account:</strong> {{ account_id }}
+    </p>
+    <div>
+        <a href="/case/{{ case_id }}" class="btn btn-secondary" style="margin-right: 0.5rem;">&larr; Back to Case</a>
+        <a href="/case/{{ case_id }}/timeline/{{ account_id }}" class="btn btn-secondary">View Timeline</a>
+    </div>
+</div>
+
+{% if is_truncated %}
+<div style="background-color: #fff3cd; color: #856404; padding: 1rem; border-radius: 8px; border: 1px solid #ffeeba; margin-bottom: 2rem;">
+    <strong>Note:</strong> This account has a large number of counterparties. The graph has been truncated to the top 50 neighbors by transaction volume to maintain performance.
+</div>
+{% endif %}
+
+<div id="network-graph"></div>
+
+<script type="text/javascript">
+    const rawNodes = {{ nodes_json | safe }};
+    const rawEdges = {{ edges_json | safe }};
+    const focalAccount = "{{ account_id }}";
+    const caseId = "{{ case_id }}";
+
+    // Transform nodes for vis-network
+    const nodes = rawNodes.map(n => {
+        const isFocal = n.id === focalAccount;
+        const txVolume = n.total_sent + n.total_received;
+
+        // Base size, scaled slightly by log of volume
+        const size = isFocal ? 30 : Math.max(10, Math.min(25, 5 + Math.log(txVolume + 1) * 2));
+
+        let color = {
+            background: n.is_flagged ? '#dc3545' : (isFocal ? '#ffc107' : '#007bff'),
+            border: n.is_flagged ? '#a71d2a' : (isFocal ? '#d39e00' : '#0056b3')
+        };
+
+        return {
+            id: n.id,
+            label: n.id,
+            title: `Account: ${n.id}<br>Total Sent: ${n.total_sent.toFixed(2)}<br>Total Received: ${n.total_received.toFixed(2)}<br>Flagged: ${n.is_flagged}`,
+            size: size,
+            color: color,
+            shape: isFocal ? 'star' : 'dot',
+            font: {
+                color: '#333',
+                size: isFocal ? 16 : 12,
+                face: 'arial'
+            }
+        };
+    });
+
+    // Transform edges for vis-network
+    const edges = rawEdges.map(e => {
+        // Edge thickness proportional to log of amount
+        const thickness = Math.max(1, Math.min(10, Math.log(e.amount + 1) / 2));
+        return {
+            from: e.source,
+            to: e.target,
+            value: thickness,
+            title: `Amount: ${e.amount.toFixed(2)}<br>Step: ${e.step}<br>Type: ${e.tx_type}`,
+            arrows: 'to',
+            color: {
+                color: '#999',
+                highlight: '#555',
+                hover: '#777'
+            }
+        };
+    });
+
+    // create an array with nodes
+    const visNodes = new vis.DataSet(nodes);
+    // create an array with edges
+    const visEdges = new vis.DataSet(edges);
+
+    // create a network
+    const container = document.getElementById('network-graph');
+    const data = {
+        nodes: visNodes,
+        edges: visEdges
+    };
+    const options = {
+        interaction: {
+            hover: true,
+            tooltipDelay: 100
+        },
+        physics: {
+            barnesHut: {
+                gravitationalConstant: -2000,
+                centralGravity: 0.3,
+                springLength: 150,
+                springConstant: 0.04,
+                damping: 0.09
+            },
+            stabilization: {
+                iterations: 200
+            }
+        }
+    };
+    const network = new vis.Network(container, data, options);
+
+    // Double click to navigate
+    network.on("doubleClick", function (params) {
+        if (params.nodes.length > 0) {
+            const nodeId = params.nodes[0];
+            if (nodeId !== focalAccount) {
+                window.location.href = `/case/${caseId}/graph/${nodeId}`;
+            }
+        }
+    });
+</script>
+
+{% endblock %}
