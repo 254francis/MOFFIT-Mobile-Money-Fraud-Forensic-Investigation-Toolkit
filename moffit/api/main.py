@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Dict, Any, List
 from fastapi import FastAPI, Request, Form, BackgroundTasks
@@ -144,6 +145,7 @@ async def case_timeline(request: Request, id: str, account: str):
     # Retrieve evidence and load dataframe to get events
     evidence_list = manager.get_evidence(id)
     findings = manager.get_findings(id)
+    acct_findings = [f for f in findings if account in f.account_ids]
 
     loader = PaySimLoader()
     reconstructor = TimelineReconstructor()
@@ -155,8 +157,6 @@ async def case_timeline(request: Request, id: str, account: str):
         if os.path.exists(filepath):
             df_raw = loader.load_csv(filepath)
             df = loader.normalize(df_raw)
-            # Filter findings to just this account
-            acct_findings = [f for f in findings if account in f.account_ids]
 
             events = reconstructor.build_account_timeline(df, account)
             # Annotate with the specific findings for this account (need them as dicts)
@@ -165,8 +165,7 @@ async def case_timeline(request: Request, id: str, account: str):
             all_events.extend(annotated_events)
 
     # Generate narrative
-    acct_findings_all = [f for f in findings if account in f.account_ids]
-    findings_dicts_all = [{"pattern": f.finding_type, "step_start": f.step_start, "step_end": f.step_end} for f in acct_findings_all]
+    findings_dicts_all = [{"pattern": f.finding_type, "step_start": f.step_start, "step_end": f.step_end} for f in acct_findings]
     narrative = reconstructor.generate_narrative(all_events, account, findings_dicts_all)
 
     return templates.TemplateResponse(
@@ -174,6 +173,7 @@ async def case_timeline(request: Request, id: str, account: str):
             "case_id": id,
             "account_id": account,
             "events": all_events,
+            "events_json": json.dumps(reconstructor.to_dict_list(all_events)),
             "narrative": narrative
         }
     )
