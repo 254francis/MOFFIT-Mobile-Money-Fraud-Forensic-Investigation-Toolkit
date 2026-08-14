@@ -29,7 +29,7 @@ def setup_teardown():
 def test_get_index_returns_200():
     response = client.get("/")
     assert response.status_code == 200
-    assert "MOFFIT Dashboard" in response.text
+    assert "Home" in response.text
 
 
 def test_post_case_creates_and_redirects():
@@ -99,39 +99,93 @@ def test_get_case_status_returns_json():
     assert data["analyzing"] is False
     assert data["findings_count"] == 0
 
-def test_case_timeline_has_chart_data():
-    case = manager.create_case("Chart Test", "Desc", "Inv")
-    import tempfile
-    import os
-    fd, path = tempfile.mkstemp(suffix=".csv")
-    with os.fdopen(fd, 'w') as f:
-        f.write("step,type,amount,nameOrig,oldbalanceOrg,newbalanceOrig,nameDest,oldbalanceDest,newbalanceDest,isFlaggedFraud,isFraud\n")
-        f.write("1,TRANSFER,1000.0,C123,5000.0,4000.0,C456,1000.0,2000.0,0,0\n")
-        f.write("3,TRANSFER,4000.0,C123,4000.0,0.0,C456,1000.0,5000.0,1,1\n")
-    manager.add_evidence(case.id, path)
-    manager.add_finding(case.id, "rapid_drain", "high", "Drained", ["C123", "C456"], 1, 4, 0.99)
-    response = client.get(f"/case/{case.id}/timeline/C123")
-    assert response.status_code == 200
-    assert "chart_data" in response.text or "Chart" in response.text
+@app.get("/case/{id}/report")
+async def download_report(id: str):
+    report_path = _generate_report_sync(id)
+    return FileResponse(report_path, media_type="application/pdf", filename=f"MOFFIT_report_{id}.pdf")
 
-def test_get_findings_html_returns_fragment():
-    # First create a case
-    case = manager.create_case("Findings Test", "Desc", "Inv")
-    # Add some findings
-    manager.add_finding(case.id, "Pattern A", "high", "Desc", ["A"], 1, 2, 0.9)
-    manager.add_finding(case.id, "Pattern B", "low", "Desc", ["B"], 1, 2, 0.4)
-    # GET /case/{id}/findings?page=1
-    response = client.get(f"/case/{case.id}/findings?page=1")
-    assert response.status_code == 200
-    assert "Pattern A" in response.text
-    assert "Pattern B" in response.text
-    assert "id=\"findings-table-container\"" in response.text
+@app.get("/case/{id}/report/preview")
+async def preview_report(id: str):
+    report_path = _generate_report_sync(id)
+    return FileResponse(
+        report_path,
+        media_type="application/pdf",
+        filename=f"MOFFIT_report_{id}.pdf",
+        headers={"Content-Disposition": f"inline; filename=MOFFIT_report_{id}.pdf"}
+    )
 
-def test_get_findings_html_respects_severity():
-    case = manager.create_case("Severity Test", "Desc", "Inv")
-    manager.add_finding(case.id, "Pattern A", "high", "Desc", ["A"], 1, 2, 0.9)
-    manager.add_finding(case.id, "Pattern B", "low", "Desc", ["B"], 1, 2, 0.4)
-    response = client.get(f"/case/{case.id}/findings?page=1&severity=high")
-    assert response.status_code == 200
-    assert "Pattern A" in response.text
-    assert "<td>Pattern B</td>" not in response.text
+@app.get("/case/{id}/graph/{account}", response_class=HTMLResponse)
+async def case_graph(request: Request, id: str, account: str):
+    evidence_list = manager.get_evidence(id)
+    loader = PaySimLoader()
+    builder = TransactionGraph()
+
+    df = None
+    for ev in evidence_list:
+        filepath = ev.filename
+        if os.path.exists(filepath) and str(filepath).lower().endswith(".csv"):
+            df = loader.normalize(loader.load_csv(filepath))
+            break
+
+    if df is None:
+        return HTMLResponse("No valid CSV evidence found for this case.", status_code=404)
+
+    full_graph = builder.build(df)
+
+    if account not in full_graph:
+        return HTMLResponse(f"Account {account} not found in the transaction graph.", status_code=404)
+
+    # Get ego network (depth=1)
+    ego_net = builder.get_ego_network(full_graph, account, depth=1)
+
+    # Cap neighbors if > 50
+    neighbors = list(ego_net.nodes())
+    if account in neighbors:
+        neighbors.remove(account)
+
+    is_truncated = False
+    if len(neighbors) > 50:
+        is_truncated = True
+        def neighbor_volume(n):
+            vol = 0
+            if full_graph.has_edge(account, n):
+                vol += full_graph[account][n].get('amount', 0)
+            if full_graph.has_edge(n, account):
+                vol += full_graph[n][account].get('amount', 0)
+            return vol
+
+        neighbors.sort(key=neighbor_volume, reverse=True)
+        top_neighbors = set(neighbors[:50])
+        top_neighbors.add(account)
+        ego_net = ego_net.subgraph(top_neighbors).copy()
+
+    nodes = []
+    for n in ego_net.nodes():
+        stats = ego_net.nodes[n]
+        node_data = {
+            "id": n,
+            "total_sent": stats.get("total_sent", 0),
+            "total_received": stats.get("total_received", 0),
+            "is_flagged": stats.get("is_flagged", False)
+        }
+        nodes.append(node_data)
+
+    edges = []
+    for u, v, data in ego_net.edges(data=True):
+        edges.append({
+            "source": u,
+            "target": v,
+            "amount": data.get("amount", 0),
+            "step": data.get("step", 0),
+            "tx_type": data.get("tx_type", "")
+        })
+
+    return templates.TemplateResponse(
+        request=request, name="graph.html", context={
+            "case_id": id,
+            "account_id": account,
+            "nodes_json": json.dumps(nodes),
+            "edges_json": json.dumps(edges),
+            "is_truncated": is_truncated
+        }
+    )

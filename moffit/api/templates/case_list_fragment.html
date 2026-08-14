@@ -1,0 +1,24 @@
+{% for summary in case_summaries %}
+<div style="border: 1px solid #ddd; border-radius: 8px; padding: 1.5rem; background-color: #fff;">
+    <h2 style="margin-top: 0;"><a href="/case/{{ summary.case.id }}" style="text-decoration: none; color: #007bff;">{{ summary.case.name }}</a></h2>
+    <p><strong>Investigator:</strong> {{ summary.case.investigator }}</p>
+    <p><strong>Status:</strong> {{ summary.case.status }}</p>
+
+    <div style="margin-top: 1rem;">
+        <strong>Findings:</strong> {{ summary.findings_count }}
+        <div style="margin-top: 0.5rem;">
+            <span class="badge badge-high">High: {{ summary.findings_by_severity.get('high', 0) }}</span>
+            <span class="badge badge-medium">Med: {{ summary.findings_by_severity.get('medium', 0) }}</span>
+            <span class="badge badge-low">Low: {{ summary.findings_by_severity.get('low', 0) }}</span>
+        </div>
+    </div>
+    <div style="margin-top: 0.5rem;">
+        <strong>Evidence:</strong> {{ summary.evidence_count }} items
+    </div>
+</div>
+{% else %}
+<div style="grid-column: 1 / -1; text-align: center; padding: 3rem; background-color: #f8f9fa; border-radius: 8px; border: 1px dashed #ccc;">
+    <h2 style="color: #6c757d;">No cases found</h2>
+    <p style="color: #6c757d;">It looks like there aren't any cases matching your search, or none have been created yet.</p>
+</div>
+{% endfor %}

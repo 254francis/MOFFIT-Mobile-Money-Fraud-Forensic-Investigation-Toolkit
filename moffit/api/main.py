@@ -1,7 +1,7 @@
 import json
 import os
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, Request, Form, BackgroundTasks, UploadFile, File, HTTPException, Response
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
@@ -90,14 +90,18 @@ def run_analysis_task(case_id: str, db_manager: CaseManager):
         analysis_status[case_id] = {"analyzing": False, "findings_count": 0, "error": str(e)}
 
 @app.get("/", response_class=HTMLResponse)
-async def list_cases(request: Request):
+async def list_cases(request: Request, q: Optional[str] = None):
     cases = manager.list_cases()
+    if q:
+        q_lower = q.lower()
+        cases = [c for c in cases if q_lower in c.name.lower() or q_lower in c.investigator.lower()]
     summaries = []
     for case in cases:
         summaries.append(manager.get_case_summary(case.id))
 
+    template_name = "case_list_fragment.html" if request.headers.get("hx-request") else "index.html"
     return templates.TemplateResponse(
-        request=request, name="index.html", context={"case_summaries": summaries}
+        request=request, name=template_name, context={"case_summaries": summaries}
     )
 
 @app.post("/case")
@@ -271,8 +275,7 @@ async def case_timeline(request: Request, id: str, account: str):
         }
     )
 
-@app.get("/case/{id}/report")
-async def generate_report(id: str):
+def _generate_report_sync(id: str) -> str:
     summary = manager.get_case_summary(id)
     evidence = manager.get_evidence(id)
     findings = manager.get_findings(id)
@@ -280,12 +283,9 @@ async def generate_report(id: str):
     generator = ForensicReportGenerator()
     report_path = f"report_{id}.pdf"
 
-    # We need to construct timelines for findings that are severe to add to report.
-    # The generator expects timelines as a mapping account_id -> list of events dicts.
     loader = PaySimLoader()
     reconstructor = TimelineReconstructor()
 
-    # Build dictionary for custody
     custody_items = []
     for ev in evidence:
         custody_items.append({
@@ -297,10 +297,9 @@ async def generate_report(id: str):
 
     custody = {
         "items": custody_items,
-        "manifest_hash": "N/A" # Ideally computed
+        "manifest_hash": "N/A"
     }
 
-    # Format findings as expected by PDF report
     findings_dicts = []
     accounts_to_timeline = set()
     for f in findings:
@@ -320,13 +319,9 @@ async def generate_report(id: str):
                     accounts_to_timeline.add(acc)
 
     timeline_map = {}
-
-    # Cap timelines: top accounts by finding amount-relevance (report is capped
-    # at top-100 findings anyway; timelines for a handful of accounts suffice).
     MAX_TIMELINE_ACCOUNTS = 5
     top_accounts = list(accounts_to_timeline)[:MAX_TIMELINE_ACCOUNTS]
 
-    # Load evidence CSV ONCE, reuse for all accounts
     df = None
     for ev in evidence:
         if os.path.exists(ev.filename) and str(ev.filename).lower().endswith(".csv"):
@@ -341,8 +336,6 @@ async def generate_report(id: str):
             if annotated:
                 timeline_map[acc] = reconstructor.to_dict_list(annotated)
 
-    # Narrative: use the reconstructor's generator for the first timeline account,
-    # falling back to a generic line for cases with no timelines.
     overall_narrative = f"This report covers the forensic investigation of case '{summary['case']['name']}'."
     if timeline_map and df is not None:
         first_acc = next(iter(timeline_map))
@@ -359,8 +352,22 @@ async def generate_report(id: str):
         narrative=overall_narrative,
         output_path=report_path,
     )
+    return report_path
 
+@app.get("/case/{id}/report")
+async def download_report(id: str):
+    report_path = _generate_report_sync(id)
     return FileResponse(report_path, media_type="application/pdf", filename=f"MOFFIT_report_{id}.pdf")
+
+@app.get("/case/{id}/report/preview")
+async def preview_report(id: str):
+    report_path = _generate_report_sync(id)
+    return FileResponse(
+        report_path,
+        media_type="application/pdf",
+        filename=f"MOFFIT_report_{id}.pdf",
+        headers={"Content-Disposition": f"inline; filename=MOFFIT_report_{id}.pdf"}
+    )
 
 @app.get("/case/{id}/graph/{account}", response_class=HTMLResponse)
 async def case_graph(request: Request, id: str, account: str):
@@ -383,10 +390,8 @@ async def case_graph(request: Request, id: str, account: str):
     if account not in full_graph:
         return HTMLResponse(f"Account {account} not found in the transaction graph.", status_code=404)
 
-    # Get ego network (depth=1)
     ego_net = builder.get_ego_network(full_graph, account, depth=1)
 
-    # Cap neighbors if > 50
     neighbors = list(ego_net.nodes())
     if account in neighbors:
         neighbors.remove(account)
@@ -394,7 +399,6 @@ async def case_graph(request: Request, id: str, account: str):
     is_truncated = False
     if len(neighbors) > 50:
         is_truncated = True
-        # Sort neighbors by total transaction volume with the focal account
         def neighbor_volume(n):
             vol = 0
             if full_graph.has_edge(account, n):
@@ -406,8 +410,6 @@ async def case_graph(request: Request, id: str, account: str):
         neighbors.sort(key=neighbor_volume, reverse=True)
         top_neighbors = set(neighbors[:50])
         top_neighbors.add(account)
-
-        # Subgraph of just the top neighbors and focal account
         ego_net = ego_net.subgraph(top_neighbors).copy()
 
     nodes = []

@@ -27,12 +27,16 @@
             </div>
         </div>
 
-        <h3>Findings</h3>
+<h3>Findings</h3>
         <div id="findings-table-container" hx-get="/case/{{ summary.case.id }}/findings" hx-trigger="load" hx-swap="outerHTML">
             <p>Loading findings...</p>
         </div>
+        </div>
         {% else %}
-        <p>No findings available. Run analysis on evidence to generate findings.</p>
+        <div style="text-align: center; padding: 3rem; background-color: #f8f9fa; border-radius: 8px; border: 1px dashed #ccc;">
+            <h2 style="color: #6c757d;">No findings yet</h2>
+            <p style="color: #6c757d;">Run analysis on your evidence to detect fraudulent patterns.</p>
+        </div>
         {% endif %}
     </div>
 
@@ -43,7 +47,7 @@
 
             <div id="analyze-section" style="margin-bottom: 1rem;">
                 <button id="analyze-btn" class="btn btn-primary" onclick="startAnalysis()" style="width: 100%; margin-bottom: 0.5rem;" {% if is_analyzing %}disabled{% endif %}>
-                    {% if is_analyzing %}Analyzing...{% else %}Analyze Evidence{% endif %}
+                    {% if is_analyzing %}<span class="spinner"></span>Analyzing...{% else %}Analyze Evidence{% endif %}
                 </button>
                 <div id="analysis-status" style="font-size: 0.9rem; color: #6c757d; text-align: center;"
                     {% if is_analyzing %}hx-get="/case/{{ summary.case.id }}/status_html" hx-trigger="every 3s"{% endif %}>
@@ -51,7 +55,10 @@
                 </div>
             </div>
 
-            <a href="/case/{{ summary.case.id }}/report" class="btn btn-secondary" style="width: 100%; box-sizing: border-box; text-align: center;">Download Forensic Report</a>
+            <div style="display: flex; gap: 0.5rem;">
+                <a href="/case/{{ summary.case.id }}/report" class="btn btn-secondary" style="flex: 1; text-align: center;">Download Report</a>
+                <a href="/case/{{ summary.case.id }}/report/preview" target="_blank" class="btn btn-secondary" style="flex: 1; text-align: center;">Preview Report</a>
+            </div>
         </div>
 
         <div style="background-color: #f8f9fa; padding: 1.5rem; border-radius: 8px;">
@@ -77,7 +84,9 @@
                 {% endfor %}
             </ul>
             {% else %}
-            <p>No evidence added.</p>
+<div style="text-align: center; padding: 2rem; background-color: #fff; border-radius: 8px; border: 1px dashed #ccc;">
+                <p style="color: #6c757d; margin: 0;">No evidence added. Use the CLI to register evidence before analyzing.</p>
+            </div>
             {% endif %}
         </div>
     </div>
@@ -143,8 +152,8 @@
         const status = document.getElementById('analysis-status');
 
         btn.disabled = true;
-        btn.innerText = 'Analyzing...';
-        status.innerText = 'Starting analysis...';
+btn.innerHTML = '<span class="spinner"></span>Analyzing...';
+        status.innerText = 'Analysis in progress. Please wait...';
 
         fetch('/case/{{ summary.case.id }}/analyze', { method: 'POST' })
             .then(res => res.json())
@@ -167,7 +176,7 @@
             });
     }
 
-    document.body.addEventListener('stopPolling', function(evt) {
+document.body.addEventListener('stopPolling', function(evt) {
         const status = document.getElementById('analysis-status');
         status.removeAttribute('hx-get');
         status.removeAttribute('hx-trigger');
