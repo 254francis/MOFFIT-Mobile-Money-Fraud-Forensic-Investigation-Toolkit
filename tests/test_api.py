@@ -99,14 +99,27 @@ def test_get_case_status_returns_json():
     assert data["analyzing"] is False
     assert data["findings_count"] == 0
 
+def test_case_timeline_has_chart_data():
+    case = manager.create_case("Chart Test", "Desc", "Inv")
+    import tempfile
+    import os
+    fd, path = tempfile.mkstemp(suffix=".csv")
+    with os.fdopen(fd, 'w') as f:
+        f.write("step,type,amount,nameOrig,oldbalanceOrg,newbalanceOrig,nameDest,oldbalanceDest,newbalanceDest,isFlaggedFraud,isFraud\n")
+        f.write("1,TRANSFER,1000.0,C123,5000.0,4000.0,C456,1000.0,2000.0,0,0\n")
+        f.write("3,TRANSFER,4000.0,C123,4000.0,0.0,C456,1000.0,5000.0,1,1\n")
+    manager.add_evidence(case.id, path)
+    manager.add_finding(case.id, "rapid_drain", "high", "Drained", ["C123", "C456"], 1, 4, 0.99)
+    response = client.get(f"/case/{case.id}/timeline/C123")
+    assert response.status_code == 200
+    assert "chart_data" in response.text or "Chart" in response.text
+
 def test_get_findings_html_returns_fragment():
     # First create a case
     case = manager.create_case("Findings Test", "Desc", "Inv")
-
     # Add some findings
     manager.add_finding(case.id, "Pattern A", "high", "Desc", ["A"], 1, 2, 0.9)
     manager.add_finding(case.id, "Pattern B", "low", "Desc", ["B"], 1, 2, 0.4)
-
     # GET /case/{id}/findings?page=1
     response = client.get(f"/case/{case.id}/findings?page=1")
     assert response.status_code == 200
@@ -118,7 +131,6 @@ def test_get_findings_html_respects_severity():
     case = manager.create_case("Severity Test", "Desc", "Inv")
     manager.add_finding(case.id, "Pattern A", "high", "Desc", ["A"], 1, 2, 0.9)
     manager.add_finding(case.id, "Pattern B", "low", "Desc", ["B"], 1, 2, 0.4)
-
     response = client.get(f"/case/{case.id}/findings?page=1&severity=high")
     assert response.status_code == 200
     assert "Pattern A" in response.text
