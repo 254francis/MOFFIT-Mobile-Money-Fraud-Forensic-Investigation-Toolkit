@@ -55,6 +55,36 @@ def test_post_case_creates_and_redirects():
     assert cases[0].name == "Test Web Case"
 
 
+def test_post_case_upload_csv(tmp_path):
+    # Set EVIDENCE_DIR for testing
+    os.environ["EVIDENCE_DIR"] = str(tmp_path / "evidence_store")
+
+    case = manager.create_case("Upload Test", "Desc", "Inv")
+
+    # Create an in-memory CSV file
+    file_content = b"step,type,amount,nameOrig,oldbalanceOrg,newbalanceOrig,nameDest,oldbalanceDest,newbalanceDest,isFraud,isFlaggedFraud\n1,PAYMENT,1060.31,C429214117,1089.0,28.69,M1591654462,0.0,0.0,0,0\n"
+    files = {"file": ("test_evidence.csv", file_content, "text/csv")}
+
+    response = client.post(f"/case/{case.id}/upload", files=files, follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/case/{case.id}"
+
+    evidence = manager.get_evidence(case.id)
+    assert len(evidence) == 1
+    assert evidence[0].sha256_hash != ""
+
+def test_post_case_upload_non_csv():
+    case = manager.create_case("Upload Test 2", "Desc", "Inv")
+
+    file_content = b"This is just a text file."
+    files = {"file": ("test.txt", file_content, "text/plain")}
+
+    response = client.post(f"/case/{case.id}/upload", files=files, follow_redirects=False)
+
+    assert response.status_code == 400
+
+
 def test_get_case_status_returns_json():
     # First create a case
     case = manager.create_case("Status Test", "Desc", "Inv")

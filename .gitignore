@@ -6,3 +6,4 @@ data/samples/*.csv
 .envreports/
 reports/
 *.joblibreport_*.pdf
+evidence_store/

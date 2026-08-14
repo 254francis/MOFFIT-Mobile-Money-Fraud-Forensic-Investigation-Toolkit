@@ -1,6 +1,6 @@
 import os
 from typing import Dict, Any, List
-from fastapi import FastAPI, Request, Form, BackgroundTasks, Response
+from fastapi import FastAPI, Request, Form, BackgroundTasks, UploadFile, File, HTTPException, Response
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 
@@ -86,6 +86,26 @@ async def create_case(
 ):
     case = manager.create_case(name=name, description=description, investigator=investigator)
     return RedirectResponse(url=f"/case/{case.id}", status_code=303)
+
+@app.post("/case/{id}/upload")
+async def upload_evidence(id: str, file: UploadFile = File(...)):
+    if not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Only CSV files are allowed.")
+
+    evidence_dir = os.environ.get("EVIDENCE_DIR", "evidence_store")
+    os.makedirs(evidence_dir, exist_ok=True)
+
+    dest = os.path.join(evidence_dir, f"{id}_{file.filename}")
+
+    # Write the upload to dest in chunks
+    with open(dest, "wb") as f:
+        while chunk := await file.read(1024 * 1024 * 10):  # 10MB chunks
+            f.write(chunk)
+
+    # Hashing/registration path
+    manager.add_evidence(case_id=id, filepath=os.path.abspath(dest))
+
+    return RedirectResponse(url=f"/case/{id}", status_code=303)
 
 @app.get("/case/{id}", response_class=HTMLResponse)
 async def case_detail(request: Request, id: str):

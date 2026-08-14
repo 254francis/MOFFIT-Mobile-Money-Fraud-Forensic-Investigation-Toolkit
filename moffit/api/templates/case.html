@@ -56,18 +56,28 @@
 
         <div style="background-color: #f8f9fa; padding: 1.5rem; border-radius: 8px;">
             <h2>Evidence</h2>
+
+            <div style="margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #dee2e6;">
+                <h3>Upload Evidence</h3>
+                <form action="/case/{{ summary.case.id }}/upload" method="POST" enctype="multipart/form-data" style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="file" name="file" accept=".csv" required class="form-control" style="flex-grow: 1;">
+                    <button type="submit" class="btn btn-primary">Upload Evidence</button>
+                </form>
+            </div>
+
             {% if evidence %}
             <ul style="list-style-type: none; padding: 0;">
                 {% for item in evidence %}
                 <li style="margin-bottom: 1rem; border-bottom: 1px solid #ddd; padding-bottom: 1rem;">
                     <strong>File:</strong> {{ item.filename.split('/')[-1] }}<br>
                     <strong>Size:</strong> {{ (item.file_size / 1024 / 1024)|round(2) }} MB<br>
-                    <strong>SHA-256:</strong> <span style="font-family: monospace; font-size: 0.8rem;">{{ item.sha256_hash[:16] }}...</span>
+                    <strong>SHA-256:</strong> <span style="font-family: monospace; font-size: 0.8rem;">{{ item.sha256_hash[:16] }}...</span><br>
+                    <strong>Acquired At:</strong> {{ item.acquired_at }}
                 </li>
                 {% endfor %}
             </ul>
             {% else %}
-            <p>No evidence added. Use the CLI to register evidence.</p>
+            <p>No evidence added.</p>
             {% endif %}
         </div>
     </div>
