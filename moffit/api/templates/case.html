@@ -83,49 +83,60 @@
     </div>
 </div>
 
+{% if summary.findings_count > 0 %}
+<div id="chart-data"
+     data-severity="{{ summary.findings_by_severity | tojson | safe }}"
+     data-pattern-labels="{{ pattern_labels | tojson | safe }}"
+     data-pattern-counts="{{ pattern_counts | tojson | safe }}"
+     style="display: none;"></div>
+{% endif %}
+
 <script>
-    {% if summary.findings_count > 0 %}
-    // Severity Chart
-    const ctxSev = document.getElementById('severityChart').getContext('2d');
-    new Chart(ctxSev, {
-        type: 'bar',
-        data: {
-            labels: ['High', 'Medium', 'Low'],
-            datasets: [{
-                label: 'Findings by Severity',
-                data: [
-                    {{ summary.findings_by_severity.get('high', 0) }},
-                    {{ summary.findings_by_severity.get('medium', 0) }},
-                    {{ summary.findings_by_severity.get('low', 0) }}
-                ],
-                backgroundColor: ['#dc3545', '#ffc107', '#28a745']
-            }]
-        },
-        options: {
-            indexAxis: 'y',
-            plugins: { legend: { display: false } }
-        }
-    });
+    const chartData = document.getElementById('chart-data');
+    if (chartData) {
+        const severityData = JSON.parse(chartData.dataset.severity || '{}');
+        const patternLabels = JSON.parse(chartData.dataset.patternLabels || '[]');
+        const patternCounts = JSON.parse(chartData.dataset.patternCounts || '[]');
 
-    // Pattern Chart
-    const ctxPat = document.getElementById('patternChart').getContext('2d');
-    new Chart(ctxPat, {
-        type: 'bar',
-        data: {
-            labels: {{ pattern_labels | tojson }},
-            datasets: [{
-                label: 'Findings by Pattern',
-                data: {{ pattern_counts | tojson }},
-                backgroundColor: '#007bff'
-            }]
-        },
-        options: {
-            plugins: { legend: { display: false } }
-        }
-    });
-    {% endif %}
+        // Severity Chart
+        const ctxSev = document.getElementById('severityChart').getContext('2d');
+        new Chart(ctxSev, {
+            type: 'bar',
+            data: {
+                labels: ['High', 'Medium', 'Low'],
+                datasets: [{
+                    label: 'Findings by Severity',
+                    data: [
+                        severityData.high ?? 0,
+                        severityData.medium ?? 0,
+                        severityData.low ?? 0
+                    ],
+                    backgroundColor: ['#dc3545', '#ffc107', '#28a745']
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                plugins: { legend: { display: false } }
+            }
+        });
 
-
+        // Pattern Chart
+        const ctxPat = document.getElementById('patternChart').getContext('2d');
+        new Chart(ctxPat, {
+            type: 'bar',
+            data: {
+                labels: patternLabels,
+                datasets: [{
+                    label: 'Findings by Pattern',
+                    data: patternCounts,
+                    backgroundColor: '#007bff'
+                }]
+            },
+            options: {
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
 
     function startAnalysis() {
         const btn = document.getElementById('analyze-btn');

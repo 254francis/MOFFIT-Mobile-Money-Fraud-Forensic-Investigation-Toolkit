@@ -1,4 +1,5 @@
 import os
+import json
 from typing import Dict, Any, List
 from fastapi import FastAPI, Request, Form, BackgroundTasks, UploadFile, File, HTTPException, Response
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
@@ -7,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 from moffit.custody.case_db import CaseManager
 from moffit.ingestion.paysim_loader import PaySimLoader
 from moffit.detection.pattern_detector import FraudPatternDetector
+from moffit.detection.graph_builder import TransactionGraph
 from moffit.timeline.reconstructor import TimelineReconstructor
 from moffit.reporting.pdf_report import ForensicReportGenerator
 
@@ -56,6 +58,25 @@ def run_analysis_task(case_id: str, db_manager: CaseManager):
             df_raw = loader.load_csv(filepath)
             df = loader.normalize(df_raw)
 
+            findings = detector.analyze(df)
+            all_findings.extend(findings)
+
+        if all_findings:
+            payload = []
+            for f in all_findings:
+                severity = "high" if f["confidence"] >= 0.9 else ("medium" if f["confidence"] >= 0.75 else "low")
+                payload.append({
+                    "finding_type": f["pattern"],
+                    "severity": severity,
+                    "description": f["description"],
+                    "account_ids": [f["account_id"]],
+                    "step_start": f["step_start"],
+                    "step_end": f["step_end"],
+                    "confidence": f["confidence"],
+                })
+            db_manager.add_findings_bulk(case_id, payload)
+
+    
             
 
         # Update case summary findings count
@@ -340,3 +361,82 @@ async def generate_report(id: str):
     )
 
     return FileResponse(report_path, media_type="application/pdf", filename=f"MOFFIT_report_{id}.pdf")
+
+@app.get("/case/{id}/graph/{account}", response_class=HTMLResponse)
+async def case_graph(request: Request, id: str, account: str):
+    evidence_list = manager.get_evidence(id)
+    loader = PaySimLoader()
+    builder = TransactionGraph()
+
+    df = None
+    for ev in evidence_list:
+        filepath = ev.filename
+        if os.path.exists(filepath) and str(filepath).lower().endswith(".csv"):
+            df = loader.normalize(loader.load_csv(filepath))
+            break
+
+    if df is None:
+        return HTMLResponse("No valid CSV evidence found for this case.", status_code=404)
+
+    full_graph = builder.build(df)
+
+    if account not in full_graph:
+        return HTMLResponse(f"Account {account} not found in the transaction graph.", status_code=404)
+
+    # Get ego network (depth=1)
+    ego_net = builder.get_ego_network(full_graph, account, depth=1)
+
+    # Cap neighbors if > 50
+    neighbors = list(ego_net.nodes())
+    if account in neighbors:
+        neighbors.remove(account)
+
+    is_truncated = False
+    if len(neighbors) > 50:
+        is_truncated = True
+        # Sort neighbors by total transaction volume with the focal account
+        def neighbor_volume(n):
+            vol = 0
+            if full_graph.has_edge(account, n):
+                vol += full_graph[account][n].get('amount', 0)
+            if full_graph.has_edge(n, account):
+                vol += full_graph[n][account].get('amount', 0)
+            return vol
+
+        neighbors.sort(key=neighbor_volume, reverse=True)
+        top_neighbors = set(neighbors[:50])
+        top_neighbors.add(account)
+
+        # Subgraph of just the top neighbors and focal account
+        ego_net = ego_net.subgraph(top_neighbors).copy()
+
+    nodes = []
+    for n in ego_net.nodes():
+        stats = ego_net.nodes[n]
+        node_data = {
+            "id": n,
+            "total_sent": stats.get("total_sent", 0),
+            "total_received": stats.get("total_received", 0),
+            "is_flagged": stats.get("is_flagged", False)
+        }
+        nodes.append(node_data)
+
+    edges = []
+    for u, v, data in ego_net.edges(data=True):
+        edges.append({
+            "source": u,
+            "target": v,
+            "amount": data.get("amount", 0),
+            "step": data.get("step", 0),
+            "tx_type": data.get("tx_type", "")
+        })
+
+    return templates.TemplateResponse(
+        request=request, name="graph.html", context={
+            "case_id": id,
+            "account_id": account,
+            "nodes_json": json.dumps(nodes),
+            "edges_json": json.dumps(edges),
+            "is_truncated": is_truncated
+        }
+    )
