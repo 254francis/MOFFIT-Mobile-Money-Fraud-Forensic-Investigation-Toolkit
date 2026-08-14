@@ -2,58 +2,173 @@
 
 {% block title %}Timeline - {{ account_id }}{% endblock %}
 
+{% block head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+{% endblock %}
+
 {% block content %}
 <div style="margin-bottom: 2rem;">
     <h1>Timeline for Account: {{ account_id }}</h1>
     <a href="/case/{{ case_id }}">← Back to Case</a>
 </div>
 
-<div style="display: grid; grid-template-columns: 3fr 1fr; gap: 2rem;">
-    <!-- Left Column: Events Table -->
-    <div>
-        <h2>Event Sequence</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Step</th>
-                    <th>Type</th>
-                    <th>Counterparty</th>
-                    <th>Amount (KES)</th>
-                    <th>Bal Before</th>
-                    <th>Bal After</th>
-                    <th>Annotations</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for event in events %}
-                <tr style="{% if event.is_flagged %}background-color: #fff3cd;{% endif %}">
-                    <td>{{ event.step }}</td>
-                    <td>{{ event.event_type }}</td>
-                    <td>{{ event.counterparty }}</td>
-                    <td>{{ "%.2f"|format(event.amount) }}</td>
-                    <td>{{ "%.2f"|format(event.balance_before) }}</td>
-                    <td>{{ "%.2f"|format(event.balance_after) }}</td>
-                    <td>
-                        {% if event.annotation %}
-                            <strong style="color: #dc3545;">{{ event.annotation }}</strong>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="7">No events found for this account.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-
-    <!-- Right Column: Narrative Panel -->
-    <div>
-        <div style="background-color: #e9ecef; padding: 1.5rem; border-radius: 8px;">
-            <h2>Investigation Narrative</h2>
-            <p style="line-height: 1.6;">{{ narrative }}</p>
-        </div>
-    </div>
+<!-- Narrative above chart -->
+<div style="background-color: #e9ecef; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+    <h2>Investigation Narrative</h2>
+    <p style="line-height: 1.6;">{{ narrative }}</p>
 </div>
+
+<!-- Chart Container -->
+<div style="margin-bottom: 2rem; padding: 1rem; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+    <h2>Transaction Timeline Overview</h2>
+    <canvas id="timelineChart" width="800" height="400"></canvas>
+</div>
+
+<!-- Table -->
+<div>
+    <h2>Event Sequence</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Step</th>
+                <th>Type</th>
+                <th>Counterparty</th>
+                <th>Amount (KES)</th>
+                <th>Bal Before</th>
+                <th>Bal After</th>
+                <th>Annotations</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for event in events %}
+            <tr style="{% if event.is_flagged %}background-color: #fff3cd;{% endif %}">
+                <td>{{ event.step }}</td>
+                <td>{{ event.event_type }}</td>
+                <td>{{ event.counterparty }}</td>
+                <td>{{ "%.2f"|format(event.amount) }}</td>
+                <td>{{ "%.2f"|format(event.balance_before) }}</td>
+                <td>{{ "%.2f"|format(event.balance_after) }}</td>
+                <td>
+                    {% if event.annotation %}
+                        <strong style="color: #dc3545;">{{ event.annotation }}</strong>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7">No events found for this account.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // Data from the backend
+    const eventsData = {{ events_json|safe }};
+
+    if (eventsData && eventsData.length > 0) {
+        // Map colors by event type
+        const colors = {
+            'TRANSFER_SENDER': '#007bff',
+            'TRANSFER_RECEIVER': '#17a2b8',
+            'CASH_OUT_SENDER': '#dc3545',
+            'CASH_IN_RECEIVER': '#28a745',
+            'PAYMENT_SENDER': '#ffc107',
+            'DEBIT_SENDER': '#6c757d'
+        };
+
+        const defaultColor = '#333333';
+
+        const chartData = eventsData.map(ev => {
+            const isDrain = ev.annotation && ev.annotation.includes('ACCOUNT DRAINED');
+            const hasAnnotation = ev.annotation !== '';
+
+            return {
+                x: ev.step,
+                y: ev.amount,
+                raw: ev, // keep raw event for tooltip
+                // Point styling
+                backgroundColor: colors[ev.event_type] || defaultColor,
+                borderColor: (isDrain || ev.is_flagged || hasAnnotation) ? '#dc3545' : (colors[ev.event_type] || defaultColor),
+                borderWidth: (isDrain || ev.is_flagged || hasAnnotation) ? 3 : 1,
+                radius: (isDrain || ev.is_flagged || hasAnnotation) ? 8 : 5,
+                pointStyle: isDrain ? 'rectRot' : 'circle' // Distinct shape for drains or flagged
+            };
+        });
+
+        const ctx = document.getElementById('timelineChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'Transaction Events',
+                    data: chartData,
+                    showLine: true, // Connect the dots to show sequence over time
+                    borderColor: '#aaaaaa',
+                    borderWidth: 1,
+                    segment: {
+                        borderColor: ctx => '#cccccc',
+                        borderDash: ctx => [5, 5],
+                    }
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Step (Time)'
+                        },
+                        type: 'linear',
+                        position: 'bottom',
+                        ticks: {
+                            precision: 0
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Amount'
+                        },
+                        beginAtZero: true
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const ev = context.raw.raw;
+                                let label = [
+                                    `Type: ${ev.event_type}`,
+                                    `Amount: ${ev.amount.toFixed(2)}`,
+                                    `Counterparty: ${ev.counterparty}`,
+                                    `Bal Before: ${ev.balance_before.toFixed(2)}`,
+                                    `Bal After: ${ev.balance_after.toFixed(2)}`
+                                ];
+                                if (ev.annotation) {
+                                    label.push(`Annotation: ${ev.annotation}`);
+                                }
+                                if (ev.is_flagged) {
+                                    label.push(`Flagged: Yes`);
+                                }
+                                return label;
+                            }
+                        }
+                    },
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    } else {
+        document.getElementById('timelineChart').style.display = 'none';
+        const ctx = document.getElementById('timelineChart').parentElement;
+        const msg = document.createElement('p');
+        msg.textContent = 'No chart data available for this account.';
+        ctx.appendChild(msg);
+    }
+</script>
 {% endblock %}

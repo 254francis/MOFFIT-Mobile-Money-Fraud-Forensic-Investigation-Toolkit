@@ -3,9 +3,9 @@ import hashlib
 import json
 import os
 import uuid
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
-from sqlalchemy import String, DateTime, Integer, Float, ForeignKey, JSON, select
+from sqlalchemy import String, DateTime, Integer, Float, ForeignKey, JSON, select, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker, relationship
 from sqlalchemy.engine import Engine, create_engine
 
@@ -193,16 +193,20 @@ class CaseManager:
             if not case:
                 raise ValueError(f"Case not found: {case_id}")
 
-            evidence_count = len(session.execute(select(Evidence).filter(Evidence.case_id == case_id)).scalars().all())
-            findings = session.execute(select(Finding).filter(Finding.case_id == case_id)).scalars().all()
+            evidence_count = session.execute(select(func.count(Evidence.id)).filter(Evidence.case_id == case_id)).scalar_one()
 
-            findings_count = len(findings)
+            # Efficient grouped count
+            severity_counts = session.execute(
+                select(Finding.severity, func.count(Finding.id))
+                .filter(Finding.case_id == case_id)
+                .group_by(Finding.severity)
+            ).all()
+
             findings_by_severity = {"high": 0, "medium": 0, "low": 0}
-            for f in findings:
-                if f.severity in findings_by_severity:
-                    findings_by_severity[f.severity] += 1
-                else:
-                    findings_by_severity[f.severity] = 1
+            findings_count = 0
+            for severity, count in severity_counts:
+                findings_by_severity[severity] = count
+                findings_count += count
 
             return {
                 "case": {
@@ -244,3 +248,48 @@ class CaseManager:
             evidence = session.execute(select(Evidence).filter(Evidence.case_id == case_id)).scalars().all()
             session.expunge_all()
             return list(evidence)
+
+    def get_paginated_findings(
+        self, case_id: str, limit: int = 50, offset: int = 0,
+        severity: Optional[str] = None, pattern: Optional[str] = None
+    ) -> Tuple[List[Finding], int]:
+        """
+        Returns findings for a specific case with pagination and filters,
+        along with the total count matching the filters.
+        """
+        with self.Session() as session:
+            query = select(Finding).filter(Finding.case_id == case_id)
+            count_query = select(func.count(Finding.id)).filter(Finding.case_id == case_id)
+
+            if severity and severity.lower() != 'all':
+                query = query.filter(Finding.severity == severity.lower())
+                count_query = count_query.filter(Finding.severity == severity.lower())
+            if pattern and pattern.lower() != 'all':
+                query = query.filter(Finding.finding_type == pattern)
+                count_query = count_query.filter(Finding.finding_type == pattern)
+
+            # Custom sorting: high > medium > low, then confidence
+            # A simple way without complex DB functions is just sorting by string might not work perfectly,
+            # but we can order by confidence for now, or just created_at
+            query = query.order_by(Finding.confidence.desc())
+
+            total = session.execute(count_query).scalar_one()
+
+            query = query.limit(limit).offset(offset)
+            findings = session.execute(query).scalars().all()
+            session.expunge_all()
+
+            return list(findings), total
+
+    def get_finding_patterns(self, case_id: str) -> Dict[str, int]:
+        """
+        Returns the counts of findings grouped by pattern for a case.
+        """
+        with self.Session() as session:
+            pattern_counts = session.execute(
+                select(Finding.finding_type, func.count(Finding.id))
+                .filter(Finding.case_id == case_id)
+                .group_by(Finding.finding_type)
+            ).all()
+
+            return {ptype: count for ptype, count in pattern_counts}
