@@ -118,3 +118,7 @@
 - Test count: 40 -> 45 (new: HTMX partial routes, upload, timeline chart, report
   preview, home search).
 - All 45 tests passing.
+- Merged PR #16 (ML dashboard). Two indentation regressions from the merge —
+  cli/main.py rank_accounts_for_case call dropped to column 0 (out of the
+  Progress with-block); pipeline.py return dropped to column 0 (out of the
+  function). Both caught by Pylance, fixed inline. 50/50 tests passing.
