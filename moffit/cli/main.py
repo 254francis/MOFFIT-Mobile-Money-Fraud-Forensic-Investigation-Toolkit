@@ -537,13 +537,9 @@ def ml_rank(
     ) as progress:
         task = progress.add_task("[cyan]Ranking accounts...", total=None)
 
-        fe = FeatureEngineer()
-        X = fe.transform(df)
-
-        clf = FraudClassifier.load(model_path)
-        ranked_df = clf.rank_accounts(df, X)
-
-        progress.update(task, completed=100)
+        from moffit.ml.pipeline import rank_accounts_for_case
+    ranked_df = rank_accounts_for_case(df, model_path)
+    progress.update(task, completed=100)
 
     table = Table(title=f"Top {top} Accounts by Fraud Probability")
     table.add_column("Rank", justify="right", style="cyan")
