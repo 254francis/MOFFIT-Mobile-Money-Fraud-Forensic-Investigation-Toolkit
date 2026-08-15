@@ -103,3 +103,18 @@
   separation demonstrated.
 - SYSTEM COMPLETE: CLI + web dashboard + ML triage, one shared database,
   38/38 tests, all success criteria passed.
+  ## 2026-08-10 — Phase 2 merge round
+- Merged PRs #13 HTMX, #12 upload, #14 graph viz, #15 timeline chart, #17 UI polish.
+- 8+ merge conflicts resolved across main.py, case.html, _findings_rows.html,
+  test_api.py — pattern was near-universal: templates and route handlers touched
+  by multiple PRs in parallel.
+- Recurring intervention #6/#7: test file collected route definitions during a bad
+  paste (`case_graph` ended up in test_api.py); Jinja template lost `finding.`
+  prefix on one line (`.confidence` -> TemplateSyntaxError). Both caught by pytest.
+- Windows Smart App Control blocked scipy .pyd files — SAC disabled on dev
+  workstation (permanent; cannot re-enable without Windows reinstall).
+- Dependency drift: scipy reinstall pulled numpy 2.5, breaking numba/SHAP. Pinned
+  numpy<2.5 in pyproject.toml.
+- Test count: 40 -> 45 (new: HTMX partial routes, upload, timeline chart, report
+  preview, home search).
+- All 45 tests passing.
