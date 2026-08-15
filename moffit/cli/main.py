@@ -536,8 +536,8 @@ def ml_rank(
     ) as progress:
         task = progress.add_task("[cyan]Ranking accounts...", total=None)
 
-ranked_df = rank_accounts_for_case(df, model_path)
-        progress.update(task, completed=100)
+    ranked_df = rank_accounts_for_case(df, model_path)
+    progress.update(task, completed=100)
 
     table = Table(title=f"Top {top} Accounts by Fraud Probability")
     table.add_column("Rank", justify="right", style="cyan")

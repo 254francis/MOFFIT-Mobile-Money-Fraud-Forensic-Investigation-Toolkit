@@ -20,4 +20,4 @@ def rank_accounts_for_case(df: pd.DataFrame, model_path: str | Path) -> pd.DataF
     fe = FeatureEngineer()
     X = fe.transform(df)
     clf = FraudClassifier.load(model_path)
-return clf.rank_accounts(df, X)
+    return clf.rank_accounts(df, X)
