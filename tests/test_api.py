@@ -99,4 +99,65 @@ def test_get_case_status_returns_json():
     assert data["analyzing"] is False
     assert data["findings_count"] == 0
 
+def test_get_findings_html_returns_fragment():
+    case = manager.create_case("Findings Test", "Desc", "Inv")
+    manager.add_finding(case.id, "Pattern A", "high", "Desc", ["A"], 1, 2, 0.9)
+    manager.add_finding(case.id, "Pattern B", "low", "Desc", ["B"], 1, 2, 0.4)
+    response = client.get(f"/case/{case.id}/findings?page=1")
+    assert response.status_code == 200
+    assert "Pattern A" in response.text
+    assert "Pattern B" in response.text
+    assert 'id="findings-table-container"' in response.text
 
+
+def test_get_findings_html_respects_severity():
+    case = manager.create_case("Severity Test", "Desc", "Inv")
+    manager.add_finding(case.id, "Pattern A", "high", "Desc", ["A"], 1, 2, 0.9)
+    manager.add_finding(case.id, "Pattern B", "low", "Desc", ["B"], 1, 2, 0.4)
+    response = client.get(f"/case/{case.id}/findings?page=1&severity=high")
+    assert response.status_code == 200
+    assert "Pattern A" in response.text
+    assert "<td>Pattern B</td>" not in response.text
+
+
+def test_case_timeline_has_chart_data():
+    case = manager.create_case("Chart Test", "Desc", "Inv")
+    import tempfile
+    fd, path = tempfile.mkstemp(suffix=".csv")
+    with os.fdopen(fd, 'w') as f:
+        f.write("step,type,amount,nameOrig,oldbalanceOrg,newbalanceOrig,nameDest,oldbalanceDest,newbalanceDest,isFlaggedFraud,isFraud\n")
+        f.write("1,TRANSFER,1000.0,C123,5000.0,4000.0,C456,1000.0,2000.0,0,0\n")
+        f.write("3,TRANSFER,4000.0,C123,4000.0,0.0,C456,1000.0,5000.0,1,1\n")
+    manager.add_evidence(case.id, path)
+    manager.add_finding(case.id, "rapid_drain", "high", "Drained", ["C123", "C456"], 1, 4, 0.99)
+    response = client.get(f"/case/{case.id}/timeline/C123")
+    assert response.status_code == 200
+    assert "chart_data" in response.text or "Chart" in response.text
+
+
+def test_get_report_preview_returns_200(monkeypatch):
+    # Mock _generate_report_sync so no real PDF is built during the test
+    def mock_generate(*args, **kwargs):
+        path = "report_test.pdf"
+        with open(path, "wb") as f:
+            f.write(b"%PDF-1.4 dummy")
+        return path
+
+    import moffit.api.main
+    monkeypatch.setattr(moffit.api.main, "_generate_report_sync", mock_generate)
+
+    case = manager.create_case("Preview Test", "Desc", "Inv")
+    response = client.get(f"/case/{case.id}/report/preview")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "inline" in response.headers["content-disposition"]
+
+
+def test_home_search_returns_fragment():
+    manager.create_case("Apple Case", "Desc", "Investigator A")
+    manager.create_case("Banana Case", "Desc", "Investigator B")
+    response = client.get("/?q=apple", headers={"hx-request": "true"})
+    assert response.status_code == 200
+    assert "Apple Case" in response.text
+    assert "Banana Case" not in response.text
+    assert "<html" not in response.text.lower()

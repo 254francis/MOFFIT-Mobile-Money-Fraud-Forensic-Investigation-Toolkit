@@ -68,7 +68,7 @@
                         N/A
                     {% endif %}
                 </td>
-                <td>{{ "%.0f"|format(.confidence * 100) }}%</td>
+                <td>{{ "%.0f"|format(finding.confidence * 100) }}%</td>
                 <td>{{ "%.2f"|format(finding.amount|default(0)) }}</td>
                 <td>{{ finding.step_start }} - {{ finding.step_end }}</td>
             </tr>
