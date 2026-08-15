@@ -161,3 +161,28 @@ def test_home_search_returns_fragment():
     assert "Apple Case" in response.text
     assert "Banana Case" not in response.text
     assert "<html" not in response.text.lower()
+
+def test_ml_status_html():
+    response = client.get("/case/TEST-123/ml/status_html")
+    assert response.status_code == 200
+    assert "Ready to train." in response.text
+
+def test_ml_metrics_html_no_model():
+    response = client.get("/case/TEST-123/ml/metrics_html")
+    assert response.status_code == 200
+    assert "No trained model yet" in response.text
+
+def test_ml_ranking_html_no_model():
+    response = client.get("/case/TEST-123/ml/ranking_html")
+    assert response.status_code == 200
+    assert "No ranking available." in response.text
+
+def test_ml_plot_missing():
+    response = client.get("/case/TEST-123/ml/plot/pr_curves")
+    assert response.status_code == 404
+    assert "Plot not found" in response.text
+
+def test_ml_plot_invalid_name():
+    response = client.get("/case/TEST-123/ml/plot/invalid_plot")
+    assert response.status_code == 404
+    assert "Invalid plot name" in response.text

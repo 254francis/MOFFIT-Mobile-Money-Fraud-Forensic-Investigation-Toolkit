@@ -1,0 +1,18 @@
+{% if status.training %}
+<div style="color: #0056b3; font-weight: bold;">
+    <span class="spinner" style="display: inline-block; width: 1em; height: 1em; border: 2px solid rgba(0,0,0,0.1); border-radius: 50%; border-top-color: #0056b3; animation: spin 1s ease-in-out infinite;"></span>
+    Training in progress...
+</div>
+{% elif status.error %}
+<div style="color: #dc3545;">
+    <strong>Error:</strong> {{ status.error }}
+</div>
+{% elif status.done %}
+<div style="color: #28a745;">
+    <strong>Training complete!</strong>
+</div>
+{% else %}
+<div style="color: #6c757d;">
+    Ready to train.
+</div>
+{% endif %}

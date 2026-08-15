@@ -1,0 +1,48 @@
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h4>Top Ranked Accounts by Fraud Probability</h4>
+    <div>
+        <span style="font-size: 0.9em; color: #6c757d;">Page {{ page }} of {{ total_pages }} ({{ total_count }} total)</span>
+    </div>
+</div>
+
+<table class="table" style="width: 100%; border-collapse: collapse;">
+    <thead>
+        <tr style="border-bottom: 2px solid #dee2e6; text-align: left;">
+            <th style="padding: 0.75rem;">Rank</th>
+            <th style="padding: 0.75rem;">Account ID</th>
+            <th style="padding: 0.75rem;">Fraud Probability</th>
+            <th style="padding: 0.75rem;">Tx Count</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for rank in rankings %}
+        <tr style="border-bottom: 1px solid #dee2e6;">
+            <td style="padding: 0.75rem;">{{ rank.rank }}</td>
+            <td style="padding: 0.75rem; font-family: monospace;">
+                {{ rank.account_id }}
+                <a href="/case/{{ case_id }}/graph/{{ rank.account_id }}" target="_blank" style="margin-left: 10px; font-size: 0.8em; text-decoration: none;">[graph]</a>
+                <a href="/case/{{ case_id }}/timeline/{{ rank.account_id }}" target="_blank" style="margin-left: 5px; font-size: 0.8em; text-decoration: none;">[timeline]</a>
+            </td>
+            <td style="padding: 0.75rem;">{{ "%.2f%%"|format(rank.fraud_probability * 100) }}</td>
+            <td style="padding: 0.75rem;">{{ rank.tx_count }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div style="display: flex; justify-content: center; gap: 1rem; margin-top: 1rem;">
+    {% if page > 1 %}
+    <button class="btn btn-sm btn-outline-secondary"
+            hx-get="/case/{{ case_id }}/ml/ranking_html?page={{ page - 1 }}"
+            hx-target="#ml-ranking" hx-swap="innerHTML">
+        &laquo; Prev
+    </button>
+    {% endif %}
+    {% if page < total_pages %}
+    <button class="btn btn-sm btn-outline-secondary"
+            hx-get="/case/{{ case_id }}/ml/ranking_html?page={{ page + 1 }}"
+            hx-target="#ml-ranking" hx-swap="innerHTML">
+        Next &raquo;
+    </button>
+    {% endif %}
+</div>

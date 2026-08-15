@@ -38,6 +38,25 @@
             <p style="color: #6c757d;">Run analysis on your evidence to detect fraudulent patterns.</p>
         </div>
         {% endif %}
+
+        <hr style="margin: 3rem 0; border-top: 1px solid #dee2e6;">
+
+        <h3>ML Triage</h3>
+        <button class="btn btn-primary" style="margin-bottom: 1rem;"
+                hx-post="/case/{{ summary.case.id }}/ml/train"
+                hx-target="#ml-status" hx-swap="innerHTML">Train ML Models</button>
+        <div id="ml-status" style="margin-bottom: 1rem;"
+             hx-get="/case/{{ summary.case.id }}/ml/status_html"
+             hx-trigger="load, every 3s"
+             hx-swap="innerHTML"></div>
+        <div id="ml-metrics" style="margin-bottom: 2rem;"
+             hx-get="/case/{{ summary.case.id }}/ml/metrics_html"
+             hx-trigger="load, mlTrainingComplete from:body"
+             hx-swap="innerHTML"></div>
+        <div id="ml-ranking"
+             hx-get="/case/{{ summary.case.id }}/ml/ranking_html"
+             hx-trigger="load, mlTrainingComplete from:body"
+             hx-swap="innerHTML"></div>
     </div>
 
     <!-- Right Column: Evidence and Actions -->
