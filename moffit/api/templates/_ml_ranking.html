@@ -19,9 +19,8 @@
         <tr style="border-bottom: 1px solid #dee2e6;">
             <td style="padding: 0.75rem;">{{ rank.rank }}</td>
             <td style="padding: 0.75rem; font-family: monospace;">
-                {{ rank.account_id }}
-                <a href="/case/{{ case_id }}/graph/{{ rank.account_id }}" target="_blank" style="margin-left: 10px; font-size: 0.8em; text-decoration: none;">[graph]</a>
-                <a href="/case/{{ case_id }}/timeline/{{ rank.account_id }}" target="_blank" style="margin-left: 5px; font-size: 0.8em; text-decoration: none;">[timeline]</a>
+                <a href="/case/{{ case_id }}/graph/{{ rank.account_id }}" target="_blank" title="View transaction graph" style="text-decoration: none;">{{ rank.account_id }}</a>
+                <a href="/case/{{ case_id }}/timeline/{{ rank.account_id }}" target="_blank" title="View timeline" style="margin-left: 0.5rem; font-size: 0.85em; text-decoration: none;">[timeline]</a>
             </td>
             <td style="padding: 0.75rem;">{{ "%.2f%%"|format(rank.fraud_probability * 100) }}</td>
             <td style="padding: 0.75rem;">{{ rank.tx_count }}</td>

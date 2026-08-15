@@ -58,9 +58,8 @@
                     {% if finding.account_ids and finding.account_ids|length > 0 %}
                         {% set account = finding.account_ids[0] %}
                         {% if account != 'DATASET' %}
-                            {{ account }}
-                            <a href="/case/{{ case_id }}/graph/{{ account }}" title="View transaction graph" style="margin-left: 0.4rem; font-size: 0.85em;">[graph]</a>
-                            <a href="/case/{{ case_id }}/timeline/{{ account }}" title="View timeline" style="margin-left: 0.2rem; font-size: 0.85em;">[timeline]</a>
+                        <a href="/case/{{ case_id }}/graph/{{ account }}" title="View transaction graph">{{ account }}</a>
+                        <a href="/case/{{ case_id }}/timeline/{{ account }}" title="View timeline" style="margin-left: 0.5rem; font-size: 0.85em;">[timeline]</a>
                         {% else %}
                             DATASET
                         {% endif %}

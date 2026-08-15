@@ -61,6 +61,17 @@ def run_ml_task(case_id: str, db_manager: CaseManager):
         output_dir = os.path.join("reports", "ml", case_id)
         evaluate_all(df, output_dir)
 
+        # Cache top-100 ranking to disk so ml_ranking_html doesn't recompute per request
+        from moffit.ml.pipeline import rank_accounts_for_case
+        model_path = os.path.join(output_dir, "xgboost_model.joblib")
+        if os.path.exists(model_path):
+            ranked_df = rank_accounts_for_case(df, model_path)
+            ranked_df = ranked_df[ranked_df["account_id"] != "DATASET"]
+            ranked_df.head(100).to_json(
+                os.path.join(output_dir, "ranking.json"),
+                orient="records"
+            )
+
         ml_status[case_id] = {"training": False, "done": True, "error": None}
     except Exception as e:
         ml_status[case_id] = {"training": False, "done": True, "error": str(e)}
@@ -305,21 +316,12 @@ def ml_ranking_html(request: Request, id: str, page: int = 1, page_size: int = 2
     if not os.path.exists(model_path):
         return HTMLResponse('<div style="text-align: center; padding: 1rem; color: #6c757d;">No ranking available. Train models first.</div>')
 
-    from moffit.ml.pipeline import rank_accounts_for_case
+    ranking_path = os.path.join(output_dir, "ranking.json")
+    if not os.path.exists(ranking_path):
+        return HTMLResponse('<div style="text-align: center; padding: 1rem; color: #6c757d;">No ranking available. Train models first.</div>')
 
-    evidence_items = manager.get_evidence(id)
-    csv_paths = [e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")]
-    if not csv_paths:
-        return HTMLResponse("No CSV evidence found.", status_code=404)
-
-    loader = PaySimLoader()
-    df = loader.normalize(loader.load_csv(csv_paths[0]))
-
-    ranked_df = rank_accounts_for_case(df, model_path)
-
-    # Filter out DATASET pseudo-account
-    ranked_df = ranked_df[ranked_df["account_id"] != "DATASET"]
-
+    import pandas as pd
+    ranked_df = pd.read_json(ranking_path, orient="records")
     total_count = len(ranked_df)
     total_pages = (total_count + page_size - 1) // page_size
     if total_pages == 0:
