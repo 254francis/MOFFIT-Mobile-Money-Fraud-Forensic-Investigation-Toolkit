@@ -33,10 +33,37 @@ def _resolve_db_path() -> str:
 manager = CaseManager(_resolve_db_path())
 # Global dictionary to track analysis status
 analysis_status: Dict[str, Dict[str, Any]] = {}
+ml_status: Dict[str, Dict[str, Any]] = {}
 
 def get_db() -> CaseManager:
     # A simple way to inject dependency or use the global one.
     return manager
+
+def run_ml_task(case_id: str, db_manager: CaseManager):
+    """Background task to run ML model training and evaluation."""
+    try:
+        from moffit.ml.evaluate import evaluate_all
+        evidence_list = db_manager.get_evidence(case_id)
+        csv_paths = [e.filename for e in evidence_list if str(e.filename).lower().endswith(".csv")]
+        if not csv_paths:
+            ml_status[case_id] = {"training": False, "done": True, "error": "No CSV evidence found"}
+            return
+
+        loader = PaySimLoader()
+        filepath = csv_paths[0]
+        if not os.path.exists(filepath):
+            ml_status[case_id] = {"training": False, "done": True, "error": "CSV evidence file not found"}
+            return
+
+        df_raw = loader.load_csv(filepath)
+        df = loader.normalize(df_raw)
+
+        output_dir = os.path.join("reports", "ml", case_id)
+        evaluate_all(df, output_dir)
+
+        ml_status[case_id] = {"training": False, "done": True, "error": None}
+    except Exception as e:
+        ml_status[case_id] = {"training": False, "done": True, "error": str(e)}
 
 def run_analysis_task(case_id: str, db_manager: CaseManager):
     """Background task to run forensic analysis on a case."""
@@ -170,6 +197,14 @@ async def case_detail(request: Request, id: str):
         }
     )
 
+@app.post("/case/{id}/ml/train")
+async def train_ml(id: str, background_tasks: BackgroundTasks, request: Request):
+    ml_status[id] = {"training": True, "done": False, "error": None}
+    background_tasks.add_task(run_ml_task, id, manager)
+    if "hx-request" in request.headers:
+        return HTMLResponse("Training started...")
+    return {"status": "started"}
+
 @app.post("/case/{id}/analyze")
 async def analyze_case(id: str, background_tasks: BackgroundTasks):
     analysis_status[id] = {"analyzing": True, "findings_count": 0}
@@ -223,6 +258,108 @@ async def get_findings_html(
             "unique_patterns": unique_patterns
         }
     )
+
+@app.get("/case/{id}/ml/status_html", response_class=HTMLResponse)
+def ml_status_html(request: Request, id: str, response: Response):
+    status = ml_status.get(id)
+    if not status:
+        # Check if already trained by looking for metrics.json
+        output_dir = os.path.join("reports", "ml", id)
+        if os.path.exists(os.path.join(output_dir, "metrics.json")):
+            status = {"training": False, "done": True, "error": None}
+        else:
+            status = {"training": False, "done": False, "error": None}
+
+    if status.get("done", False) or status.get("error"):
+        response.headers["HX-Trigger"] = "stopPolling, mlTrainingComplete"
+
+    return templates.TemplateResponse(
+        request=request, name="_ml_status.html", context={
+            "status": status,
+        }
+    )
+
+@app.get("/case/{id}/ml/metrics_html", response_class=HTMLResponse)
+def ml_metrics_html(request: Request, id: str):
+    output_dir = os.path.join("reports", "ml", id)
+    metrics_file = os.path.join(output_dir, "metrics.json")
+
+    if not os.path.exists(metrics_file):
+        return HTMLResponse('<div style="text-align: center; padding: 1rem; color: #6c757d;">No trained model yet &mdash; click Train ML Models.</div>')
+
+    with open(metrics_file, "r") as f:
+        metrics = json.load(f)
+
+    return templates.TemplateResponse(
+        request=request, name="_ml_metrics.html", context={
+            "metrics": metrics,
+            "case_id": id
+        }
+    )
+
+@app.get("/case/{id}/ml/ranking_html", response_class=HTMLResponse)
+def ml_ranking_html(request: Request, id: str, page: int = 1, page_size: int = 20):
+    output_dir = os.path.join("reports", "ml", id)
+    model_path = os.path.join(output_dir, "xgboost_model.joblib")
+
+    if not os.path.exists(model_path):
+        return HTMLResponse('<div style="text-align: center; padding: 1rem; color: #6c757d;">No ranking available. Train models first.</div>')
+
+    from moffit.ml.pipeline import rank_accounts_for_case
+
+    evidence_items = manager.get_evidence(id)
+    csv_paths = [e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")]
+    if not csv_paths:
+        return HTMLResponse("No CSV evidence found.", status_code=404)
+
+    loader = PaySimLoader()
+    df = loader.normalize(loader.load_csv(csv_paths[0]))
+
+    ranked_df = rank_accounts_for_case(df, model_path)
+
+    # Filter out DATASET pseudo-account
+    ranked_df = ranked_df[ranked_df["account_id"] != "DATASET"]
+
+    total_count = len(ranked_df)
+    total_pages = (total_count + page_size - 1) // page_size
+    if total_pages == 0:
+        total_pages = 1
+
+    offset = (page - 1) * page_size
+    paginated_df = ranked_df.iloc[offset:offset + page_size]
+
+    rankings = []
+    for idx, row in paginated_df.iterrows():
+        rankings.append({
+            "rank": offset + len(rankings) + 1,
+            "account_id": row["account_id"],
+            "fraud_probability": row["max_fraud_probability"],
+            "tx_count": row["tx_count"]
+        })
+
+    return templates.TemplateResponse(
+        request=request, name="_ml_ranking.html", context={
+            "rankings": rankings,
+            "case_id": id,
+            "page": page,
+            "total_pages": total_pages,
+            "total_count": total_count
+        }
+    )
+
+@app.get("/case/{id}/ml/plot/{plot_name}")
+def ml_plot(id: str, plot_name: str):
+    valid_plots = {"pr_curves", "feature_importance", "shap_summary"}
+    if plot_name not in valid_plots:
+        return HTMLResponse("Invalid plot name", status_code=404)
+
+    output_dir = os.path.join("reports", "ml", id)
+    plot_path = os.path.join(output_dir, f"{plot_name}.png")
+
+    if not os.path.exists(plot_path):
+        return HTMLResponse("Plot not found", status_code=404)
+
+    return FileResponse(plot_path, media_type="image/png")
 
 @app.get("/case/{id}/status_html", response_class=HTMLResponse)
 async def case_status_html(request: Request, id: str, response: Response):

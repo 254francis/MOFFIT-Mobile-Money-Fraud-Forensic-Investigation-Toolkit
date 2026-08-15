@@ -511,8 +511,7 @@ def ml_rank(
     """
     Ranks accounts by fraud probability using the trained XGBoost model.
     """
-    from moffit.ml.features import FeatureEngineer
-    from moffit.ml.classifier import FraudClassifier
+    from moffit.ml.pipeline import rank_accounts_for_case
 
     manager = get_case_manager()
     evidence_items = manager.get_evidence(case_id)
@@ -537,9 +536,8 @@ def ml_rank(
     ) as progress:
         task = progress.add_task("[cyan]Ranking accounts...", total=None)
 
-        from moffit.ml.pipeline import rank_accounts_for_case
-    ranked_df = rank_accounts_for_case(df, model_path)
-    progress.update(task, completed=100)
+ranked_df = rank_accounts_for_case(df, model_path)
+        progress.update(task, completed=100)
 
     table = Table(title=f"Top {top} Accounts by Fraud Probability")
     table.add_column("Rank", justify="right", style="cyan")

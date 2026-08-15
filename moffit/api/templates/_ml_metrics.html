@@ -1,0 +1,37 @@
+<h4>Model Metrics</h4>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Model</th>
+            <th>Precision</th>
+            <th>Recall</th>
+            <th>F1 Score</th>
+            <th>AUPRC</th>
+            <th>ROC-AUC</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for model_name, model_metrics in metrics.items() %}
+        <tr>
+            <td>{{ model_name }}</td>
+            <td>{{ "%.4f"|format(model_metrics.precision) }}</td>
+            <td>{{ "%.4f"|format(model_metrics.recall) }}</td>
+            <td>{{ "%.4f"|format(model_metrics.f1) }}</td>
+            <td>{{ "%.4f"|format(model_metrics.auprc) }}</td>
+            <td>{{ "%.4f"|format(model_metrics.roc_auc) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1.5rem;">
+    <div>
+        <img src="/case/{{ case_id }}/ml/plot/pr_curves" alt="Precision-Recall Curves" style="max-width: 100%; border: 1px solid #dee2e6; border-radius: 4px;">
+    </div>
+    <div>
+        <img src="/case/{{ case_id }}/ml/plot/feature_importance" alt="Feature Importance" style="max-width: 100%; border: 1px solid #dee2e6; border-radius: 4px;">
+    </div>
+    <div>
+        <img src="/case/{{ case_id }}/ml/plot/shap_summary" alt="SHAP Summary Plot" style="max-width: 100%; border: 1px solid #dee2e6; border-radius: 4px;">
+    </div>
+</div>
