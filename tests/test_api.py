@@ -1,4 +1,5 @@
 import os
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -10,6 +11,7 @@ from moffit.api.main import app, manager
 from moffit.custody.case_db import Base
 
 client = TestClient(app)
+
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
@@ -37,7 +39,7 @@ def test_post_case_creates_and_redirects():
     data = {
         "name": "Test Web Case",
         "investigator": "Agent Web",
-        "description": "Created via API test"
+        "description": "Created via API test",
     }
     response = client.post("/case", data=data, follow_redirects=False)
 
@@ -68,3 +70,19 @@ def test_get_case_status_returns_json():
     assert "findings_count" in data
     assert data["analyzing"] is False
     assert data["findings_count"] == 0
+
+
+def test_get_ml_status_returns_json():
+    case = manager.create_case("ML Status Test", "Desc", "Inv")
+    response = client.get(f"/case/{case.id}/ml/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert "training" in data
+    assert data["training"] is False
+
+
+def test_get_ml_ranking_empty_when_no_model():
+    case = manager.create_case("ML Ranking Test", "Desc", "Inv")
+    response = client.get(f"/case/{case.id}/ml/ranking")
+    assert response.status_code == 200
+    assert response.json() == []

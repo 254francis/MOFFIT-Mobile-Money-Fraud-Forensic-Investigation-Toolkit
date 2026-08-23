@@ -1,21 +1,23 @@
-import os
-import pytest
 import hashlib
-from moffit.custody.case_db import CaseManager, Case, Evidence, Finding
+import os
+
+import pytest
+
+from moffit.custody.case_db import CaseManager
+
 
 def test_case_manager_init(tmp_path):
     db_path = tmp_path / "test_case.db"
     manager = CaseManager(str(db_path))
     assert os.path.exists(db_path)
 
+
 def test_create_case(tmp_path):
     db_path = tmp_path / "test_case.db"
     manager = CaseManager(str(db_path))
 
     case = manager.create_case(
-        name="Test Case",
-        description="A test case",
-        investigator="Test Investigator"
+        name="Test Case", description="A test case", investigator="Test Investigator"
     )
 
     assert case.id is not None
@@ -28,14 +30,13 @@ def test_create_case(tmp_path):
     assert len(cases) == 1
     assert cases[0].id == case.id
 
+
 def test_add_evidence(tmp_path):
     db_path = tmp_path / "test_case.db"
     manager = CaseManager(str(db_path))
 
     case = manager.create_case(
-        name="Test Case",
-        description="A test case",
-        investigator="Test Investigator"
+        name="Test Case", description="A test case", investigator="Test Investigator"
     )
 
     # Create a dummy evidence file
@@ -47,9 +48,7 @@ def test_add_evidence(tmp_path):
     expected_sha256 = hashlib.sha256(b"test data").hexdigest()
 
     evidence = manager.add_evidence(
-        case_id=case.id,
-        filepath=str(evidence_path),
-        notes="Test evidence"
+        case_id=case.id, filepath=str(evidence_path), notes="Test evidence"
     )
 
     assert evidence.id is not None
@@ -60,14 +59,13 @@ def test_add_evidence(tmp_path):
     assert evidence.sha256_hash == expected_sha256
     assert evidence.notes == "Test evidence"
 
+
 def test_add_finding(tmp_path):
     db_path = tmp_path / "test_case.db"
     manager = CaseManager(str(db_path))
 
     case = manager.create_case(
-        name="Test Case",
-        description="A test case",
-        investigator="Test Investigator"
+        name="Test Case", description="A test case", investigator="Test Investigator"
     )
 
     finding = manager.add_finding(
@@ -78,7 +76,7 @@ def test_add_finding(tmp_path):
         account_ids=["A123", "B456", "C789"],
         step_start=1,
         step_end=10,
-        confidence=0.85
+        confidence=0.85,
     )
 
     assert finding.id is not None
@@ -95,14 +93,13 @@ def test_add_finding(tmp_path):
     assert len(findings) == 1
     assert findings[0].id == finding.id
 
+
 def test_get_case_summary(tmp_path):
     db_path = tmp_path / "test_case.db"
     manager = CaseManager(str(db_path))
 
     case = manager.create_case(
-        name="Test Case",
-        description="A test case",
-        investigator="Test Investigator"
+        name="Test Case", description="A test case", investigator="Test Investigator"
     )
 
     # Add evidence
@@ -124,6 +121,7 @@ def test_get_case_summary(tmp_path):
     assert summary["findings_by_severity"]["high"] == 2
     assert summary["findings_by_severity"]["medium"] == 1
     assert summary["findings_by_severity"]["low"] == 0
+
 
 def test_invalid_case_id(tmp_path):
     db_path = tmp_path / "test_case.db"

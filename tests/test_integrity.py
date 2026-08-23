@@ -1,14 +1,15 @@
-import os
 import json
-import pytest
+
 import pandas as pd
+
 from moffit.custody.integrity import (
-    hash_file,
+    EvidenceManifest,
     hash_dataframe,
-    verify_file,
+    hash_file,
     sign_record,
-    EvidenceManifest
+    verify_file,
 )
+
 
 def test_hash_file_and_verify(tmp_path):
     # Create a temp file
@@ -117,7 +118,9 @@ def test_evidence_manifest(tmp_path):
     with open(str(json_path), "r") as f:
         tampered_manifest_data = json.load(f)
 
-    tampered_manifest_data["manifest_hash"] = "0000000000000000000000000000000000000000000000000000000000000000"
+    tampered_manifest_data["manifest_hash"] = (
+        "0000000000000000000000000000000000000000000000000000000000000000"
+    )
 
     with open(str(json_path), "w") as f:
         json.dump(tampered_manifest_data, f)

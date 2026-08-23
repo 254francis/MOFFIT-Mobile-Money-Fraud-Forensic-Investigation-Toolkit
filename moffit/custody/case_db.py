@@ -1,56 +1,82 @@
 import datetime
 import hashlib
-import json
 import os
 import uuid
-from typing import List, Dict, Any, Optional
+from typing import Any
 
-from sqlalchemy import String, DateTime, Integer, Float, ForeignKey, JSON, select
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker, relationship
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, select
 from sqlalchemy.engine import Engine, create_engine
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    relationship,
+    sessionmaker,
+)
+
 
 class Base(DeclarativeBase):
     pass
 
+
 class Case(Base):
-    __tablename__ = 'cases'
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    __tablename__ = "cases"
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4())
+    )
     name: Mapped[str] = mapped_column(String, nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
     investigator: Mapped[str] = mapped_column(String, nullable=False)
-    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=lambda: datetime.datetime.now(datetime.UTC)
+    )
     status: Mapped[str] = mapped_column(String, default="open")
 
-    evidence: Mapped[List["Evidence"]] = relationship(back_populates="case", cascade="all, delete-orphan")
-    findings: Mapped[List["Finding"]] = relationship(back_populates="case", cascade="all, delete-orphan")
+    evidence: Mapped[list["Evidence"]] = relationship(
+        back_populates="case", cascade="all, delete-orphan"
+    )
+    findings: Mapped[list["Finding"]] = relationship(
+        back_populates="case", cascade="all, delete-orphan"
+    )
+
 
 class Evidence(Base):
-    __tablename__ = 'evidence'
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    case_id: Mapped[str] = mapped_column(String, ForeignKey('cases.id'), nullable=False)
+    __tablename__ = "evidence"
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    case_id: Mapped[str] = mapped_column(String, ForeignKey("cases.id"), nullable=False)
     filename: Mapped[str] = mapped_column(String, nullable=False)
     sha256_hash: Mapped[str] = mapped_column(String, nullable=False)
     md5_hash: Mapped[str] = mapped_column(String, nullable=False)
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
-    acquired_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
-    notes: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    acquired_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=lambda: datetime.datetime.now(datetime.UTC)
+    )
+    notes: Mapped[str | None] = mapped_column(String, nullable=True)
 
     case: Mapped["Case"] = relationship(back_populates="evidence")
 
+
 class Finding(Base):
-    __tablename__ = 'findings'
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    case_id: Mapped[str] = mapped_column(String, ForeignKey('cases.id'), nullable=False)
+    __tablename__ = "findings"
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    case_id: Mapped[str] = mapped_column(String, ForeignKey("cases.id"), nullable=False)
     finding_type: Mapped[str] = mapped_column(String, nullable=False)
-    severity: Mapped[str] = mapped_column(String, nullable=False) # high|medium|low
+    severity: Mapped[str] = mapped_column(String, nullable=False)  # high|medium|low
     description: Mapped[str] = mapped_column(String, nullable=False)
-    account_ids: Mapped[List[str]] = mapped_column(JSON, nullable=False)
+    account_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     step_start: Mapped[int] = mapped_column(Integer, nullable=False)
     step_end: Mapped[int] = mapped_column(Integer, nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
-    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=lambda: datetime.datetime.now(datetime.UTC)
+    )
 
     case: Mapped["Case"] = relationship(back_populates="findings")
+
 
 class CaseManager:
     """Manages forensic cases, evidence, and findings via SQLite database."""
@@ -69,11 +95,7 @@ class CaseManager:
         Creates a new case in the database.
         """
         with self.Session() as session:
-            case = Case(
-                name=name,
-                description=description,
-                investigator=investigator
-            )
+            case = Case(name=name, description=description, investigator=investigator)
             session.add(case)
             session.commit()
             session.refresh(case)
@@ -102,7 +124,9 @@ class CaseManager:
 
         with self.Session() as session:
             # Check if case exists
-            case = session.execute(select(Case).filter(Case.id == case_id)).scalar_one_or_none()
+            case = session.execute(
+                select(Case).filter(Case.id == case_id)
+            ).scalar_one_or_none()
             if not case:
                 raise ValueError(f"Case not found: {case_id}")
 
@@ -112,7 +136,7 @@ class CaseManager:
                 sha256_hash=sha256_hash,
                 md5_hash=md5_hash,
                 file_size=file_size,
-                notes=notes
+                notes=notes,
             )
             session.add(evidence)
             session.commit()
@@ -125,17 +149,19 @@ class CaseManager:
         finding_type: str,
         severity: str,
         description: str,
-        account_ids: List[str],
+        account_ids: list[str],
         step_start: int,
         step_end: int,
-        confidence: float
+        confidence: float,
     ) -> Finding:
         """
         Adds a fraud pattern finding to a case.
         """
         with self.Session() as session:
             # Check if case exists
-            case = session.execute(select(Case).filter(Case.id == case_id)).scalar_one_or_none()
+            case = session.execute(
+                select(Case).filter(Case.id == case_id)
+            ).scalar_one_or_none()
             if not case:
                 raise ValueError(f"Case not found: {case_id}")
 
@@ -147,14 +173,14 @@ class CaseManager:
                 account_ids=account_ids,
                 step_start=step_start,
                 step_end=step_end,
-                confidence=confidence
+                confidence=confidence,
             )
             session.add(finding)
             session.commit()
             session.refresh(finding)
             return finding
-        
-    def add_findings_bulk(self, case_id: str, findings: List[Dict[str, Any]]) -> int:
+
+    def add_findings_bulk(self, case_id: str, findings: list[dict[str, Any]]) -> int:
         """
         Inserts many findings for a case in a single transaction.
         Each dict requires: finding_type, severity, description,
@@ -162,7 +188,9 @@ class CaseManager:
         Returns the number of findings inserted.
         """
         with self.Session() as session:
-            case = session.execute(select(Case).filter(Case.id == case_id)).scalar_one_or_none()
+            case = session.execute(
+                select(Case).filter(Case.id == case_id)
+            ).scalar_one_or_none()
             if not case:
                 raise ValueError(f"Case not found: {case_id}")
 
@@ -183,18 +211,28 @@ class CaseManager:
             session.commit()
             return len(objs)
 
-    def get_case_summary(self, case_id: str) -> Dict[str, Any]:
+    def get_case_summary(self, case_id: str) -> dict[str, Any]:
         """
         Returns a summary of a case, including evidence count, findings count,
         and findings breakdown by severity.
         """
         with self.Session() as session:
-            case = session.execute(select(Case).filter(Case.id == case_id)).scalar_one_or_none()
+            case = session.execute(
+                select(Case).filter(Case.id == case_id)
+            ).scalar_one_or_none()
             if not case:
                 raise ValueError(f"Case not found: {case_id}")
 
-            evidence_count = len(session.execute(select(Evidence).filter(Evidence.case_id == case_id)).scalars().all())
-            findings = session.execute(select(Finding).filter(Finding.case_id == case_id)).scalars().all()
+            evidence_count = len(
+                session.execute(select(Evidence).filter(Evidence.case_id == case_id))
+                .scalars()
+                .all()
+            )
+            findings = (
+                session.execute(select(Finding).filter(Finding.case_id == case_id))
+                .scalars()
+                .all()
+            )
 
             findings_count = len(findings)
             findings_by_severity = {"high": 0, "medium": 0, "low": 0}
@@ -211,14 +249,14 @@ class CaseManager:
                     "description": case.description,
                     "investigator": case.investigator,
                     "created_at": case.created_at,
-                    "status": case.status
+                    "status": case.status,
                 },
                 "evidence_count": evidence_count,
                 "findings_count": findings_count,
-                "findings_by_severity": findings_by_severity
+                "findings_by_severity": findings_by_severity,
             }
 
-    def list_cases(self) -> List[Case]:
+    def list_cases(self) -> list[Case]:
         """
         Lists all cases in the database.
         """
@@ -228,19 +266,28 @@ class CaseManager:
             # return as list for type hints
             return list(cases)
 
-    def get_findings(self, case_id: str) -> List[Finding]:
+    def get_findings(self, case_id: str) -> list[Finding]:
         """
         Returns all findings for a specific case.
         """
         with self.Session() as session:
-            findings = session.execute(select(Finding).filter(Finding.case_id == case_id)).scalars().all()
+            findings = (
+                session.execute(select(Finding).filter(Finding.case_id == case_id))
+                .scalars()
+                .all()
+            )
             session.expunge_all()
             return list(findings)
-    def get_evidence(self, case_id: str) -> List[Evidence]:
+
+    def get_evidence(self, case_id: str) -> list[Evidence]:
         """
         Returns all evidence records for a specific case.
         """
         with self.Session() as session:
-            evidence = session.execute(select(Evidence).filter(Evidence.case_id == case_id)).scalars().all()
+            evidence = (
+                session.execute(select(Evidence).filter(Evidence.case_id == case_id))
+                .scalars()
+                .all()
+            )
             session.expunge_all()
             return list(evidence)

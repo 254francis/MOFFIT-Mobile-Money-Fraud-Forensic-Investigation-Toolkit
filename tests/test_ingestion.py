@@ -1,6 +1,5 @@
-import pandas as pd
 import pytest
-import io
+
 from moffit.ingestion.paysim_loader import PaySimLoader
 
 # 50-row inline fixture representing PaySim CSV data
@@ -57,20 +56,24 @@ csv_data = """step,type,amount,nameOrig,oldbalanceOrg,newbalanceOrig,nameDest,ol
 3,CASH_IN,369.92,C1005,11691.94,12061.86,M2002,4297.87,4297.87,0,0
 """
 
+
 @pytest.fixture
 def sample_csv_file(tmp_path):
     file_path = tmp_path / "paysim_sample.csv"
     file_path.write_text(csv_data)
     return str(file_path)
 
+
 @pytest.fixture
 def loader():
     return PaySimLoader()
+
 
 @pytest.fixture
 def normalized_df(loader, sample_csv_file):
     raw_df = loader.load_csv(sample_csv_file)
     return loader.normalize(raw_df)
+
 
 def test_load_csv(loader, sample_csv_file):
     df = loader.load_csv(sample_csv_file)
@@ -78,14 +81,23 @@ def test_load_csv(loader, sample_csv_file):
     assert "step" in df.columns
     assert "nameOrig" in df.columns
 
+
 def test_normalize(loader, sample_csv_file):
     raw_df = loader.load_csv(sample_csv_file)
     df = loader.normalize(raw_df)
 
     expected_cols = [
-        "step", "tx_type", "amount", "sender_id", "sender_balance_before",
-        "sender_balance_after", "receiver_id", "receiver_balance_before",
-        "receiver_balance_after", "is_fraud", "is_flagged"
+        "step",
+        "tx_type",
+        "amount",
+        "sender_id",
+        "sender_balance_before",
+        "sender_balance_after",
+        "receiver_id",
+        "receiver_balance_before",
+        "receiver_balance_after",
+        "is_fraud",
+        "is_flagged",
     ]
     for col in expected_cols:
         assert col in df.columns
@@ -93,6 +105,7 @@ def test_normalize(loader, sample_csv_file):
     assert df["step"].dtype == int
     assert df["amount"].dtype == float
     assert df["is_fraud"].dtype == bool
+
 
 def test_filter_by_account(loader, normalized_df):
     account_id = "C1001"
@@ -102,8 +115,13 @@ def test_filter_by_account(loader, normalized_df):
         assert row["sender_id"] == account_id or row["receiver_id"] == account_id
 
     # Count manually
-    count = sum(1 for line in csv_data.strip().split("\n")[1:] if "C1001" in line.split(",")[3] or "C1001" in line.split(",")[6])
+    count = sum(
+        1
+        for line in csv_data.strip().split("\n")[1:]
+        if "C1001" in line.split(",")[3] or "C1001" in line.split(",")[6]
+    )
     assert len(filtered_df) == count
+
 
 def test_filter_by_timerange(loader, normalized_df):
     start, end = 3, 5
@@ -112,6 +130,7 @@ def test_filter_by_timerange(loader, normalized_df):
     assert len(filtered_df) > 0
     for idx, row in filtered_df.iterrows():
         assert start <= row["step"] <= end
+
 
 def test_get_account_history(loader, normalized_df):
     account_id = "C1001"

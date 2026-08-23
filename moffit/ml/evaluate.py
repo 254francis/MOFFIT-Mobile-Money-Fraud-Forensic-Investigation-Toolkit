@@ -1,11 +1,22 @@
-import os
 import json
+import os
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, average_precision_score, confusion_matrix, precision_recall_curve
-from .features import FeatureEngineer
+from sklearn.metrics import (
+    average_precision_score,
+    confusion_matrix,
+    f1_score,
+    precision_recall_curve,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
+
 from .classifier import FraudClassifier
+from .features import FeatureEngineer
+
 
 def evaluate_all(df: pd.DataFrame, output_dir: str) -> dict:
     """
@@ -26,14 +37,16 @@ def evaluate_all(df: pd.DataFrame, output_dir: str) -> dict:
 
     # Check if target 'is_fraud' exists in original df
     if "is_fraud" not in df.columns:
-        raise ValueError("DataFrame must contain 'is_fraud' column for training and evaluation.")
+        raise ValueError(
+            "DataFrame must contain 'is_fraud' column for training and evaluation."
+        )
 
     y = df.loc[X.index, "is_fraud"].astype(int)
 
     models = {
         "logistic": FraudClassifier("logistic"),
         "random_forest": FraudClassifier("random_forest"),
-        "xgboost": FraudClassifier("xgboost")
+        "xgboost": FraudClassifier("xgboost"),
     }
 
     metrics = {}
@@ -52,7 +65,12 @@ def evaluate_all(df: pd.DataFrame, output_dir: str) -> dict:
         # Calculate optimal F1 threshold
         precisions, recalls, thresholds = precision_recall_curve(y_test, y_probs)
         # Avoid division by zero
-        f1_scores = np.divide(2 * (precisions * recalls), (precisions + recalls), out=np.zeros_like(precisions), where=(precisions + recalls) != 0)
+        f1_scores = np.divide(
+            2 * (precisions * recalls),
+            (precisions + recalls),
+            out=np.zeros_like(precisions),
+            where=(precisions + recalls) != 0,
+        )
 
         # The threshold maximizing F1
         best_idx = np.argmax(f1_scores)
@@ -70,7 +88,7 @@ def evaluate_all(df: pd.DataFrame, output_dir: str) -> dict:
         try:
             roc_auc = roc_auc_score(y_test, y_probs)
         except ValueError:
-            roc_auc = float('nan')
+            roc_auc = float("nan")
 
         metrics[name] = {
             "precision": float(precision),
@@ -78,7 +96,7 @@ def evaluate_all(df: pd.DataFrame, output_dir: str) -> dict:
             "f1": float(f1),
             "auprc": float(auprc),
             "roc_auc": float(roc_auc),
-            "best_threshold": float(best_threshold)
+            "best_threshold": float(best_threshold),
         }
 
         pr_curves_data[name] = (precisions, recalls)
@@ -108,7 +126,6 @@ def evaluate_all(df: pd.DataFrame, output_dir: str) -> dict:
 
     # 5. XGBoost Feature Importance
     xgb_clf = models["xgboost"]
-    import xgboost as xgb
 
     # Extract importances
     booster = xgb_clf.model.get_booster()
@@ -116,19 +133,24 @@ def evaluate_all(df: pd.DataFrame, output_dir: str) -> dict:
 
     if importance_dict:
         # Sort and take top 15
-        sorted_importance = sorted(importance_dict.items(), key=lambda x: x[1], reverse=False)[-15:]
+        sorted_importance = sorted(
+            importance_dict.items(), key=lambda x: x[1], reverse=False
+        )[-15:]
         features, gains = zip(*sorted_importance)
 
         plt.figure(figsize=(10, 6))
-        plt.barh(features, gains, color='skyblue')
+        plt.barh(features, gains, color="skyblue")
         plt.xlabel("Gain")
         plt.title("Top 15 Feature Importances (XGBoost)")
-        plt.grid(axis='x')
-        plt.savefig(os.path.join(output_dir, "feature_importance.png"), bbox_inches="tight")
+        plt.grid(axis="x")
+        plt.savefig(
+            os.path.join(output_dir, "feature_importance.png"), bbox_inches="tight"
+        )
         plt.close()
 
     # 6. SHAP Summary Plot
     import shap
+
     shap_X = X.sample(n=min(5000, len(X)), random_state=42)
     explainer = shap.TreeExplainer(xgb_clf.model)
     shap_values = explainer.shap_values(shap_X)

@@ -68,6 +68,56 @@
         {% else %}
         <p>No findings available. Run analysis on evidence to generate findings.</p>
         {% endif %}
+
+    <!-- ML Ranking Section -->
+    <div id="ml-results" style="margin-top: 3rem; display: none;">
+        <h2>ML Fraud Ranking & Metrics</h2>
+
+        <h3>Metrics</h3>
+        <table id="ml-metrics-table">
+            <thead>
+                <tr>
+                    <th>Model</th>
+                    <th>Precision</th>
+                    <th>Recall</th>
+                    <th>F1</th>
+                    <th>AUPRC</th>
+                    <th>ROC-AUC</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem; margin-bottom: 2rem;">
+            <div>
+                <h4>Precision-Recall Curves</h4>
+                <img src="/case/{{ summary.case.id }}/ml/image/pr_curves.png" style="width: 100%; max-width: 400px; border: 1px solid #ccc; border-radius: 4px;" alt="PR Curves" onerror="this.style.display='none'">
+            </div>
+            <div>
+                <h4>XGBoost Feature Importance</h4>
+                <img src="/case/{{ summary.case.id }}/ml/image/feature_importance.png" style="width: 100%; max-width: 400px; border: 1px solid #ccc; border-radius: 4px;" alt="Feature Importance" onerror="this.style.display='none'">
+            </div>
+            <div>
+                <h4>SHAP Summary</h4>
+                <img src="/case/{{ summary.case.id }}/ml/image/shap_summary.png" style="width: 100%; max-width: 400px; border: 1px solid #ccc; border-radius: 4px;" alt="SHAP Summary" onerror="this.style.display='none'">
+            </div>
+        </div>
+
+        <h3>Top Ranked Accounts</h3>
+        <table id="ml-ranking-table">
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Account</th>
+                    <th>Max Fraud Prob</th>
+                    <th>Tx Count</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- End Left Column -->
     </div>
 
     <!-- Right Column: Evidence and Actions -->
@@ -81,6 +131,14 @@
                 </button>
                 <div id="analysis-status" style="font-size: 0.9rem; color: #6c757d; text-align: center;">
                     {% if is_analyzing %}Analysis in progress. Please wait...{% endif %}
+                </div>
+            </div>
+            <div id="ml-section" style="margin-bottom: 1rem;">
+                <button id="ml-train-btn" class="btn btn-warning" onclick="startMLTraining()" style="width: 100%; margin-bottom: 0.5rem;" {% if is_ml_training %}disabled{% endif %}>
+                    {% if is_ml_training %}Training ML...{% else %}Train ML Models{% endif %}
+                </button>
+                <div id="ml-status" style="font-size: 0.9rem; color: #6c757d; text-align: center;">
+                    {% if is_ml_training %}Training in progress. Please wait...{% endif %}
                 </div>
             </div>
 
@@ -199,5 +257,115 @@
     {% if is_analyzing %}
     startPolling();
     {% endif %}
+
+    let mlPollingInterval = null;
+
+    function startMLTraining() {
+        const btn = document.getElementById('ml-train-btn');
+        const status = document.getElementById('ml-status');
+
+        btn.disabled = true;
+        btn.innerText = 'Training ML...';
+        status.innerText = 'Training in progress. Please wait... (this takes minutes)';
+
+        fetch('/case/{{ summary.case.id }}/ml/train', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if(data.status === 'started') {
+                    startMLPolling();
+                } else {
+                    btn.disabled = false;
+                    btn.innerText = 'Train ML Models';
+                    status.innerText = 'Training failed to start.';
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerText = 'Train ML Models';
+                status.innerText = 'Error starting training.';
+            });
+    }
+
+    function startMLPolling() {
+        if (mlPollingInterval) return;
+        mlPollingInterval = setInterval(checkMLStatus, 5000);
+    }
+
+    function checkMLStatus() {
+        fetch('/case/{{ summary.case.id }}/ml/status')
+            .then(res => res.json())
+            .then(data => {
+                if (!data.training) {
+                    clearInterval(mlPollingInterval);
+                    mlPollingInterval = null;
+                    document.getElementById('ml-train-btn').innerText = 'Train ML Models';
+                    document.getElementById('ml-train-btn').disabled = false;
+                    if (data.error) {
+                        document.getElementById('ml-status').innerText = 'Training failed: ' + data.error;
+                    } else {
+                        document.getElementById('ml-status').innerText = 'Training complete.';
+                        loadMLResults();
+                    }
+                }
+            })
+            .catch(err => console.error("ML Polling error", err));
+    }
+
+    function loadMLResults() {
+        fetch('/case/{{ summary.case.id }}/ml/status')
+            .then(res => res.json())
+            .then(data => {
+                if (!data.training && data.done && !data.error) {
+                    document.getElementById('ml-results').style.display = 'block';
+
+                    // Load Metrics
+                    fetch('/case/{{ summary.case.id }}/ml/metrics')
+                        .then(res => res.json())
+                        .then(metrics => {
+                            const tbody = document.querySelector('#ml-metrics-table tbody');
+                            tbody.innerHTML = '';
+                            for (const [model, stats] of Object.entries(metrics)) {
+                                tbody.innerHTML += `
+                                    <tr>
+                                        <td>${model}</td>
+                                        <td>${stats.precision.toFixed(4)}</td>
+                                        <td>${stats.recall.toFixed(4)}</td>
+                                        <td>${stats.f1.toFixed(4)}</td>
+                                        <td>${stats.auprc.toFixed(4)}</td>
+                                        <td>${stats.roc_auc.toFixed(4)}</td>
+                                    </tr>
+                                `;
+                            }
+                        });
+
+                    // Load Ranking
+                    fetch('/case/{{ summary.case.id }}/ml/ranking?top=20')
+                        .then(res => res.json())
+                        .then(ranking => {
+                            const tbody = document.querySelector('#ml-ranking-table tbody');
+                            tbody.innerHTML = '';
+                            ranking.forEach((acc, index) => {
+                                tbody.innerHTML += `
+                                    <tr>
+                                        <td>${index + 1}</td>
+                                        <td><a href="/case/{{ summary.case.id }}/timeline/${acc.account_id}">${acc.account_id}</a></td>
+                                        <td>${(acc.max_fraud_probability * 100).toFixed(2)}%</td>
+                                        <td>${acc.tx_count}</td>
+                                    </tr>
+                                `;
+                            });
+                        });
+                }
+            });
+    }
+
+    // Auto-start polling if already training on page load
+    {% if is_ml_training %}
+    startMLPolling();
+    {% else %}
+    // Attempt to load existing results on load
+    loadMLResults();
+    {% endif %}
+
 </script>
 {% endblock %}

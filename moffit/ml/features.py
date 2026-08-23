@@ -1,5 +1,6 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
+
 
 class FeatureEngineer:
     """
@@ -33,26 +34,45 @@ class FeatureEngineer:
         # One-hot encoding for tx_type
         tx_types = ["CASH_IN", "CASH_OUT", "DEBIT", "PAYMENT", "TRANSFER"]
         for tx_type in tx_types:
-            features[f"tx_type_{tx_type}"] = (features["tx_type"] == tx_type).astype(float)
+            features[f"tx_type_{tx_type}"] = (features["tx_type"] == tx_type).astype(
+                float
+            )
 
         # Balance change ratio: amount / (sender_balance_before + 1)
-        features["balance_change_ratio"] = features["amount"] / (features["sender_balance_before"] + 1.0)
+        features["balance_change_ratio"] = features["amount"] / (
+            features["sender_balance_before"] + 1.0
+        )
 
         # Sender drained: 1 if sender_balance_after < 0.1 * sender_balance_before else 0
-        features["sender_drained"] = (features["sender_balance_after"] < 0.1 * features["sender_balance_before"]).astype(float)
+        features["sender_drained"] = (
+            features["sender_balance_after"] < 0.1 * features["sender_balance_before"]
+        ).astype(float)
 
         # Balance mismatch: abs(sender_balance_before - amount - sender_balance_after) > 0.01
-        features["balance_mismatch"] = (np.abs(features["sender_balance_before"] - features["amount"] - features["sender_balance_after"]) > 0.01).astype(float)
+        features["balance_mismatch"] = (
+            np.abs(
+                features["sender_balance_before"]
+                - features["amount"]
+                - features["sender_balance_after"]
+            )
+            > 0.01
+        ).astype(float)
 
         # receiver_prior_tx_count: rolling count of receiver's prior transactions
         # We need past transactions only. Group by receiver_id, use cumulative count - 1
-        features["receiver_prior_tx_count"] = features.groupby("receiver_id").cumcount().astype(float)
+        features["receiver_prior_tx_count"] = (
+            features.groupby("receiver_id").cumcount().astype(float)
+        )
 
         # amount_vs_sender_median: amount / (sender's historical median amount + 1)
         # Note: must be calculated while sorted chronologically to avoid data leakage
-        features["historical_median"] = features.groupby("sender_id")["amount"].transform(lambda x: x.shift(1).expanding().median())
+        features["historical_median"] = features.groupby("sender_id")[
+            "amount"
+        ].transform(lambda x: x.shift(1).expanding().median())
         features["historical_median"] = features["historical_median"].fillna(0.0)
-        features["amount_vs_sender_median"] = features["amount"] / (features["historical_median"] + 1.0)
+        features["amount_vs_sender_median"] = features["amount"] / (
+            features["historical_median"] + 1.0
+        )
 
         # sender_tx_velocity: sender's transaction count in the prior 10 steps
         # To avoid future data, we set index to 'step' as timedelta, group by sender, count last 10 hours excluding current (closed='left')
@@ -71,7 +91,9 @@ class FeatureEngineer:
         )
 
         sorted_by_group["sender_tx_velocity"] = counts
-        sorted_by_group["sender_tx_velocity"] = sorted_by_group["sender_tx_velocity"].fillna(0.0).astype(float)
+        sorted_by_group["sender_tx_velocity"] = (
+            sorted_by_group["sender_tx_velocity"].fillna(0.0).astype(float)
+        )
 
         # Now restore the original row order
         features = sorted_by_group.sort_values("_row_id").reset_index(drop=True)
@@ -89,7 +111,7 @@ class FeatureEngineer:
             "receiver_prior_tx_count",
             "sender_tx_velocity",
             "amount_vs_sender_median",
-            "hour_of_day"
+            "hour_of_day",
         ]
 
         # The index is currently 0..N-1 aligned with original row positions

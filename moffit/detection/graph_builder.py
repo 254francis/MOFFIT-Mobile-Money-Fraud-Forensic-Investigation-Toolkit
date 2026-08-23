@@ -1,8 +1,9 @@
-import networkx as nx
-import pandas as pd
+
 import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
-from typing import List, Dict, Any
+import pandas as pd
+
 
 class TransactionGraph:
     """
@@ -28,28 +29,38 @@ class TransactionGraph:
         node_stats = {}
 
         for _, row in df.iterrows():
-            sender = row['sender_id']
-            receiver = row['receiver_id']
-            amount = float(row['amount'])
-            step = int(row['step'])
-            tx_type = str(row['tx_type'])
-            is_flagged = bool(row.get('is_flagged', False))
+            sender = row["sender_id"]
+            receiver = row["receiver_id"]
+            amount = float(row["amount"])
+            step = int(row["step"])
+            tx_type = str(row["tx_type"])
+            is_flagged = bool(row.get("is_flagged", False))
 
             # Update sender stats
             if sender not in node_stats:
-                node_stats[sender] = {'total_sent': 0.0, 'total_received': 0.0, 'tx_count': 0, 'is_flagged': False}
-            node_stats[sender]['total_sent'] += amount
-            node_stats[sender]['tx_count'] += 1
+                node_stats[sender] = {
+                    "total_sent": 0.0,
+                    "total_received": 0.0,
+                    "tx_count": 0,
+                    "is_flagged": False,
+                }
+            node_stats[sender]["total_sent"] += amount
+            node_stats[sender]["tx_count"] += 1
             if is_flagged:
-                node_stats[sender]['is_flagged'] = True
+                node_stats[sender]["is_flagged"] = True
 
             # Update receiver stats
             if receiver not in node_stats:
-                node_stats[receiver] = {'total_sent': 0.0, 'total_received': 0.0, 'tx_count': 0, 'is_flagged': False}
-            node_stats[receiver]['total_received'] += amount
-            node_stats[receiver]['tx_count'] += 1
+                node_stats[receiver] = {
+                    "total_sent": 0.0,
+                    "total_received": 0.0,
+                    "tx_count": 0,
+                    "is_flagged": False,
+                }
+            node_stats[receiver]["total_received"] += amount
+            node_stats[receiver]["tx_count"] += 1
             if is_flagged:
-                node_stats[receiver]['is_flagged'] = True
+                node_stats[receiver]["is_flagged"] = True
 
             # Add edge
             G.add_edge(sender, receiver, amount=amount, step=step, tx_type=tx_type)
@@ -60,7 +71,9 @@ class TransactionGraph:
 
         return G
 
-    def get_ego_network(self, graph: nx.DiGraph, account_id: str, depth: int = 2) -> nx.DiGraph:
+    def get_ego_network(
+        self, graph: nx.DiGraph, account_id: str, depth: int = 2
+    ) -> nx.DiGraph:
         """
         Returns a subgraph of all nodes within 'depth' hops of account_id.
 
@@ -79,7 +92,7 @@ class TransactionGraph:
         # The prompt doesn't specify. I will use undirected=True for full context.
         return nx.ego_graph(graph, account_id, radius=depth, undirected=True)
 
-    def compute_centrality(self, graph: nx.DiGraph) -> Dict[str, Dict[str, float]]:
+    def compute_centrality(self, graph: nx.DiGraph) -> dict[str, dict[str, float]]:
         """
         Computes various centrality metrics for the graph nodes.
 
@@ -98,14 +111,16 @@ class TransactionGraph:
         centrality = {}
         for node in graph.nodes():
             centrality[node] = {
-                'degree': degree_cent.get(node, 0.0),
-                'betweenness': betweenness_cent.get(node, 0.0),
-                'in_degree': in_degree_cent.get(node, 0.0),
-                'out_degree': out_degree_cent.get(node, 0.0)
+                "degree": degree_cent.get(node, 0.0),
+                "betweenness": betweenness_cent.get(node, 0.0),
+                "in_degree": in_degree_cent.get(node, 0.0),
+                "out_degree": out_degree_cent.get(node, 0.0),
             }
         return centrality
 
-    def find_high_velocity_accounts(self, graph: nx.DiGraph, df: pd.DataFrame, window: int = 10, threshold: int = 8) -> List[str]:
+    def find_high_velocity_accounts(
+        self, graph: nx.DiGraph, df: pd.DataFrame, window: int = 10, threshold: int = 8
+    ) -> list[str]:
         """
         Finds accounts with more than 'threshold' transactions in any 'window' of steps.
 
@@ -120,14 +135,16 @@ class TransactionGraph:
         """
         high_velocity_accounts = set()
 
-        senders = df[['sender_id', 'step']].rename(columns={'sender_id': 'account_id'})
-        receivers = df[['receiver_id', 'step']].rename(columns={'receiver_id': 'account_id'})
+        senders = df[["sender_id", "step"]].rename(columns={"sender_id": "account_id"})
+        receivers = df[["receiver_id", "step"]].rename(
+            columns={"receiver_id": "account_id"}
+        )
 
         all_txs = pd.concat([senders, receivers])
-        all_txs = all_txs.sort_values(by=['account_id', 'step'])
+        all_txs = all_txs.sort_values(by=["account_id", "step"])
 
-        for account_id, group in all_txs.groupby('account_id'):
-            steps = group['step'].values
+        for account_id, group in all_txs.groupby("account_id"):
+            steps = group["step"].values
             n = len(steps)
             if n > threshold:
                 left = 0
@@ -140,7 +157,9 @@ class TransactionGraph:
 
         return list(high_velocity_accounts)
 
-    def visualize_ego_network(self, graph: nx.DiGraph, account_id: str, output_path: str) -> None:
+    def visualize_ego_network(
+        self, graph: nx.DiGraph, account_id: str, output_path: str
+    ) -> None:
         """
         Visualizes the ego network of a specific account and saves it as a PNG.
         Colors nodes: red if is_flagged, steelblue otherwise.
@@ -157,22 +176,31 @@ class TransactionGraph:
 
         node_colors = []
         for node in ego_net.nodes():
-            is_flagged = ego_net.nodes[node].get('is_flagged', False)
+            is_flagged = ego_net.nodes[node].get("is_flagged", False)
             if is_flagged:
-                node_colors.append('red')
+                node_colors.append("red")
             else:
-                node_colors.append('steelblue')
+                node_colors.append("steelblue")
 
         edge_widths = []
         for u, v, data in ego_net.edges(data=True):
-            amount = data.get('amount', 1.0)
+            amount = data.get("amount", 1.0)
             # Use math.log but fallback securely
             # width = log(amount) as specified, we'll use np.log(amount) or fallback
             width = np.log(amount) if amount > 1 else 0.5
             edge_widths.append(width)
 
         plt.figure(figsize=(10, 8))
-        nx.draw(ego_net, pos, node_color=node_colors, width=edge_widths, with_labels=True,
-                node_size=600, font_size=10, font_color='white', edge_color='gray')
+        nx.draw(
+            ego_net,
+            pos,
+            node_color=node_colors,
+            width=edge_widths,
+            with_labels=True,
+            node_size=600,
+            font_size=10,
+            font_color="white",
+            edge_color="gray",
+        )
         plt.savefig(output_path)
         plt.close()

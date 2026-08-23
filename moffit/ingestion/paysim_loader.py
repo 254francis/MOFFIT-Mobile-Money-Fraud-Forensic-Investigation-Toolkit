@@ -1,5 +1,7 @@
+from typing import Any
+
 import pandas as pd
-from typing import Dict, Union, Any
+
 
 class PaySimLoader:
     """
@@ -39,19 +41,21 @@ class PaySimLoader:
         Returns:
             pd.DataFrame: The normalized DataFrame.
         """
-        df_normalized = df.rename(columns={
-            "step": "step",
-            "type": "tx_type",
-            "amount": "amount",
-            "nameOrig": "sender_id",
-            "oldbalanceOrg": "sender_balance_before",
-            "newbalanceOrig": "sender_balance_after",
-            "nameDest": "receiver_id",
-            "oldbalanceDest": "receiver_balance_before",
-            "newbalanceDest": "receiver_balance_after",
-            "isFraud": "is_fraud",
-            "isFlaggedFraud": "is_flagged"
-        })
+        df_normalized = df.rename(
+            columns={
+                "step": "step",
+                "type": "tx_type",
+                "amount": "amount",
+                "nameOrig": "sender_id",
+                "oldbalanceOrg": "sender_balance_before",
+                "newbalanceOrig": "sender_balance_after",
+                "nameDest": "receiver_id",
+                "oldbalanceDest": "receiver_balance_before",
+                "newbalanceDest": "receiver_balance_after",
+                "isFraud": "is_fraud",
+                "isFlaggedFraud": "is_flagged",
+            }
+        )
 
         df_normalized["step"] = df_normalized["step"].astype(int)
         df_normalized["amount"] = df_normalized["amount"].astype(float)
@@ -76,7 +80,9 @@ class PaySimLoader:
         """
         return df[(df["sender_id"] == account_id) | (df["receiver_id"] == account_id)]
 
-    def filter_by_timerange(self, df: pd.DataFrame, start_step: int, end_step: int) -> pd.DataFrame:
+    def filter_by_timerange(
+        self, df: pd.DataFrame, start_step: int, end_step: int
+    ) -> pd.DataFrame:
         """
         Filters the DataFrame to include only transactions within a specific step range (inclusive).
 
@@ -90,7 +96,7 @@ class PaySimLoader:
         """
         return df[(df["step"] >= start_step) & (df["step"] <= end_step)]
 
-    def get_account_history(self, df: pd.DataFrame, account_id: str) -> Dict[str, Any]:
+    def get_account_history(self, df: pd.DataFrame, account_id: str) -> dict[str, Any]:
         """
         Generates transaction history statistics and DataFrames for a specific account.
 
@@ -118,5 +124,5 @@ class PaySimLoader:
             "received": received_df,
             "total_sent": float(total_sent),
             "total_received": float(total_received),
-            "tx_count": int(tx_count)
+            "tx_count": int(tx_count),
         }

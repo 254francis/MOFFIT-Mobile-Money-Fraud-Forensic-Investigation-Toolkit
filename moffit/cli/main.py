@@ -1,15 +1,21 @@
-from moffit.reporting.pdf_report import ForensicReportGenerator
+import os
+
 import typer
 from rich.console import Console
-from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.panel import Panel
-import os
-from typing import Optional
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+)
+from rich.table import Table
 
 from moffit.custody.case_db import CaseManager
-from moffit.ingestion.paysim_loader import PaySimLoader
 from moffit.detection.pattern_detector import FraudPatternDetector
+from moffit.ingestion.paysim_loader import PaySimLoader
+from moffit.reporting.pdf_report import ForensicReportGenerator
 from moffit.timeline.reconstructor import TimelineReconstructor
 
 app = typer.Typer(help="MOFFIT (Mobile Money Fraud Forensic Investigation Toolkit) CLI")
@@ -19,6 +25,7 @@ ml_app = typer.Typer(help="ML fraud classification")
 app.add_typer(ml_app, name="ml")
 
 console = Console()
+
 
 def get_case_manager() -> CaseManager:
     """
@@ -35,18 +42,28 @@ def get_case_manager() -> CaseManager:
         db_path = db_path[9:]
     return CaseManager(db_path)
 
+
 @app.command()
 def info() -> None:
     """
     Prints basic info about MOFFIT.
     """
-    console.print(Panel.fit("MOFFIT: Mobile Money Fraud Forensic Investigation Toolkit", title="MOFFIT", border_style="blue"))
+    console.print(
+        Panel.fit(
+            "MOFFIT: Mobile Money Fraud Forensic Investigation Toolkit",
+            title="MOFFIT",
+            border_style="blue",
+        )
+    )
+
 
 @case_app.command("new")
 def case_new(
     name: str = typer.Option(..., "--name", help="Name of the case"),
-    investigator: str = typer.Option(..., "--investigator", help="Name of the investigator"),
-    desc: Optional[str] = typer.Option(None, "--desc", help="Description of the case")
+    investigator: str = typer.Option(
+        ..., "--investigator", help="Name of the investigator"
+    ),
+    desc: str | None = typer.Option(None, "--desc", help="Description of the case"),
 ) -> None:
     """
     Creates a new case and prints the case ID.
@@ -57,8 +74,17 @@ def case_new(
         desc (Optional[str]): A description of the case.
     """
     manager = get_case_manager()
-    case = manager.create_case(name=name, description=desc or "", investigator=investigator)
-    console.print(Panel.fit(f"[green]Case created successfully![/green]\nCase ID: [bold]{case.id}[/bold]", title="Success", border_style="green"))
+    case = manager.create_case(
+        name=name, description=desc or "", investigator=investigator
+    )
+    console.print(
+        Panel.fit(
+            f"[green]Case created successfully![/green]\nCase ID: [bold]{case.id}[/bold]",
+            title="Success",
+            border_style="green",
+        )
+    )
+
 
 @case_app.command("list")
 def case_list() -> None:
@@ -85,15 +111,16 @@ def case_list() -> None:
             str(case.investigator),
             str(case.status),
             str(case.created_at.strftime("%Y-%m-%d %H:%M:%S")),
-            str(findings_count)
+            str(findings_count),
         )
 
     console.print(table)
 
+
 @app.command()
 def ingest(
     case_id: str = typer.Option(..., "--case-id", help="UUID of the case"),
-    file_path: str = typer.Option(..., "--file", help="Path to the PaySim CSV file")
+    file_path: str = typer.Option(..., "--file", help="Path to the PaySim CSV file"),
 ) -> None:
     """
     Loads a PaySim CSV, registers it as Evidence, and prints ingestion stats.
@@ -114,7 +141,7 @@ def ingest(
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
         TaskProgressColumn(),
-        console=console
+        console=console,
     ) as progress:
         task = progress.add_task("[cyan]Ingesting evidence...", total=100)
 
@@ -126,7 +153,9 @@ def ingest(
         progress.update(task, advance=30, description="[cyan]Normalizing data...")
         normalized_df = loader.normalize(df)
 
-        progress.update(task, advance=30, description="[cyan]Hashing and registering evidence...")
+        progress.update(
+            task, advance=30, description="[cyan]Hashing and registering evidence..."
+        )
         evidence = manager.add_evidence(case_id=case_id, filepath=file_path)
 
         progress.update(task, advance=10, description="[green]Ingestion complete!")
@@ -160,10 +189,13 @@ def get_severity_badge(severity: str) -> str:
         return "[white on green] LOW [/white on green]"
     return severity
 
+
 @app.command()
 def analyze(
     case_id: str = typer.Option(..., "--case-id", help="UUID of the case"),
-    account: Optional[str] = typer.Option(None, "--account", help="Optional account ID to filter by")
+    account: str | None = typer.Option(
+        None, "--account", help="Optional account ID to filter by"
+    ),
 ) -> None:
     """
     Runs FraudPatternDetector, saves findings to the DB, and prints a Rich table.
@@ -179,16 +211,22 @@ def analyze(
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
         TaskProgressColumn(),
-        console=console
+        console=console,
     ) as progress:
         task = progress.add_task("[cyan]Running fraud pattern detection...", total=100)
 
         # Stub data loading
         progress.update(task, advance=10, description="[cyan]Locating case evidence...")
         evidence_items = manager.get_evidence(case_id)
-        csv_paths = [e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")]
+        csv_paths = [
+            e.filename
+            for e in evidence_items
+            if str(e.filename).lower().endswith(".csv")
+        ]
         if not csv_paths:
-            console.print("[red]No CSV evidence registered for this case. Run 'moffit ingest' first.[/red]")
+            console.print(
+                "[red]No CSV evidence registered for this case. Run 'moffit ingest' first.[/red]"
+            )
             raise typer.Exit(1)
 
         progress.update(task, advance=10, description="[cyan]Loading case data...")
@@ -198,25 +236,34 @@ def analyze(
         progress.update(task, advance=40, description="[cyan]Analyzing patterns...")
         detector = FraudPatternDetector()
         if account is not None and not dummy_df.empty:
-            filtered_df = dummy_df[(dummy_df["sender_id"] == account) | (dummy_df["receiver_id"] == account)]
+            filtered_df = dummy_df[
+                (dummy_df["sender_id"] == account)
+                | (dummy_df["receiver_id"] == account)
+            ]
             findings = detector.analyze(filtered_df)
         else:
             findings = detector.analyze(dummy_df)
 
         progress.update(task, advance=30, description="[cyan]Saving findings to DB...")
-        
+
         payload = []
         for f in findings:
-            severity = "high" if f["confidence"] >= 0.9 else ("medium" if f["confidence"] >= 0.75 else "low")
-            payload.append({
-                "finding_type": f["pattern"],
-                "severity": severity,
-                "description": f["description"],
-                "account_ids": [f["account_id"]],
-                "step_start": f["step_start"],
-                "step_end": f["step_end"],
-                "confidence": f["confidence"],
-            })
+            severity = (
+                "high"
+                if f["confidence"] >= 0.9
+                else ("medium" if f["confidence"] >= 0.75 else "low")
+            )
+            payload.append(
+                {
+                    "finding_type": f["pattern"],
+                    "severity": severity,
+                    "description": f["description"],
+                    "account_ids": [f["account_id"]],
+                    "step_start": f["step_start"],
+                    "step_end": f["step_end"],
+                    "confidence": f["confidence"],
+                }
+            )
         manager.add_findings_bulk(case_id, payload)
 
         progress.update(task, advance=10, description="[green]Analysis complete!")
@@ -231,21 +278,33 @@ def analyze(
 
     for f in findings:
         table.add_row(
-            get_severity_badge("high" if f["confidence"] >= 0.9 else ("medium" if f["confidence"] >= 0.75 else "low")),
+            get_severity_badge(
+                "high"
+                if f["confidence"] >= 0.9
+                else ("medium" if f["confidence"] >= 0.75 else "low")
+            ),
             f["pattern"],
             f["account_id"],
             f"{f['step_start']}-{f['step_end']}",
-            f"{f['confidence'] * 100:.0f}%"
+            f"{f['confidence'] * 100:.0f}%",
         )
 
     console.print(table)
-    console.print(Panel.fit("[green]Successfully saved findings to database.[/green]", title="Success", border_style="green"))
+    console.print(
+        Panel.fit(
+            "[green]Successfully saved findings to database.[/green]",
+            title="Success",
+            border_style="green",
+        )
+    )
 
 
 @app.command()
 def timeline(
     case_id: str = typer.Option(..., "--case-id", help="UUID of the case"),
-    account: str = typer.Option(..., "--account", help="Account ID to generate timeline for")
+    account: str = typer.Option(
+        ..., "--account", help="Account ID to generate timeline for"
+    ),
 ) -> None:
     """
     Prints a chronological Rich table of events for a specific account.
@@ -257,34 +316,40 @@ def timeline(
 
     manager = get_case_manager()
     evidence_items = manager.get_evidence(case_id)
-    csv_paths = [e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")]
+    csv_paths = [
+        e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")
+    ]
     if not csv_paths:
-            console.print("[red]No CSV evidence registered for this case. Run 'moffit ingest' first.[/red]")
-            raise typer.Exit(1)
+        console.print(
+            "[red]No CSV evidence registered for this case. Run 'moffit ingest' first.[/red]"
+        )
+        raise typer.Exit(1)
 
     loader = PaySimLoader()
     try:
-            df = loader.normalize(loader.load_csv(csv_paths[0]))
+        df = loader.normalize(loader.load_csv(csv_paths[0]))
     except Exception as e:
-            console.print(f"[red]Failed to load CSV evidence: {str(e)}[/red]")
-            raise typer.Exit(1)
+        console.print(f"[red]Failed to load CSV evidence: {e!s}[/red]")
+        raise typer.Exit(1)
 
-        # Findings for THIS account only: annotate_events matches by step range,
-        # so unfiltered findings would cross-contaminate annotations (and loop
-        # over the full findings table per event).
+    # Findings for THIS account only: annotate_events matches by step range,
+    # so unfiltered findings would cross-contaminate annotations (and loop
+    # over the full findings table per event).
     findings_dicts = [
-            {"pattern": f.finding_type, "step_start": f.step_start, "step_end": f.step_end}
-            for f in manager.get_findings(case_id)
-            if account in (f.account_ids or [])
-        ]
+        {"pattern": f.finding_type, "step_start": f.step_start, "step_end": f.step_end}
+        for f in manager.get_findings(case_id)
+        if account in (f.account_ids or [])
+    ]
 
     reconstructor = TimelineReconstructor()
     events = reconstructor.build_account_timeline(df, account_id=account)
     events = reconstructor.annotate_events(events, findings_dicts)
 
     if not events:
-            console.print(f"[yellow]No transactions found for account {account} in this case's evidence.[/yellow]")
-            raise typer.Exit(0)
+        console.print(
+            f"[yellow]No transactions found for account {account} in this case's evidence.[/yellow]"
+        )
+        raise typer.Exit(0)
 
     table = Table(title=f"Transaction Timeline: {account}")
     table.add_column("Step", justify="right", style="cyan")
@@ -295,24 +360,25 @@ def timeline(
     table.add_column("Annotation", style="yellow")
 
     for e in events:
-            table.add_row(
-                str(e.step),
-                e.event_type,
-                f"{e.amount:.2f}",
-                f"{e.balance_before:.2f}",
-                f"{e.balance_after:.2f}",
-                e.annotation,
-            )
+        table.add_row(
+            str(e.step),
+            e.event_type,
+            f"{e.amount:.2f}",
+            f"{e.balance_before:.2f}",
+            f"{e.balance_after:.2f}",
+            e.annotation,
+        )
 
     console.print(table)
 
     narrative = reconstructor.generate_narrative(events, account, findings_dicts)
     console.print(Panel.fit(narrative, title="Narrative", border_style="blue"))
 
+
 @app.command()
 def report(
     case_id: str = typer.Option(..., "--case-id", help="UUID of the case"),
-    output: str = typer.Option(..., "--output", help="Output path for the PDF report")
+    output: str = typer.Option(..., "--output", help="Output path for the PDF report"),
 ) -> None:
     """
     Generates a PDF report for the given case.
@@ -328,7 +394,7 @@ def report(
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
         TaskProgressColumn(),
-        console=console
+        console=console,
     ) as progress:
         task = progress.add_task("[cyan]Generating PDF report...", total=100)
 
@@ -337,50 +403,65 @@ def report(
             summary = manager.get_case_summary(case_id)
             case_info = summary.get("case", {"id": case_id})
         except Exception as e:
-            console.print(f"[red]Failed to load case {case_id}: {str(e)}[/red]")
+            console.print(f"[red]Failed to load case {case_id}: {e!s}[/red]")
             raise typer.Exit(1)
 
-        progress.update(task, advance=10, description="[cyan]Loading evidence and custody manifest...")
+        progress.update(
+            task,
+            advance=10,
+            description="[cyan]Loading evidence and custody manifest...",
+        )
         evidence_items = manager.get_evidence(case_id)
 
         # Build custody manifest
         from moffit.custody.integrity import EvidenceManifest
+
         manifest = EvidenceManifest()
         for e in evidence_items:
             # We don't want to re-hash the files as they might not exist anymore,
             # we just construct the custody dict from the db.
-            manifest.items.append({
-                "type": "file",
-                "filepath": e.filename,
-                "filename": e.filename.split('/')[-1] if e.filename else '',
-                "file_size": e.file_size,
-                "sha256": e.sha256_hash,
-                "md5": e.md5_hash,
-                "acquired_at": e.acquired_at.isoformat() if e.acquired_at else '',
-                "notes": e.notes or ""
-            })
+            manifest.items.append(
+                {
+                    "type": "file",
+                    "filepath": e.filename,
+                    "filename": e.filename.split("/")[-1] if e.filename else "",
+                    "file_size": e.file_size,
+                    "sha256": e.sha256_hash,
+                    "md5": e.md5_hash,
+                    "acquired_at": e.acquired_at.isoformat() if e.acquired_at else "",
+                    "notes": e.notes or "",
+                }
+            )
         custody = manifest.finalize(case_id, case_info.get("investigator", "Unknown"))
 
         progress.update(task, advance=10, description="[cyan]Loading findings...")
         findings_objs = manager.get_findings(case_id)
         findings = []
         for f in findings_objs:
-            findings.append({
-                "id": f.id,
-                "finding_type": f.finding_type,
-                "severity": f.severity,
-                "description": f.description,
-                "account_ids": f.account_ids,
-                "step_start": f.step_start,
-                "step_end": f.step_end,
-                "confidence": f.confidence,
-                "created_at": f.created_at.isoformat() if f.created_at else ''
-            })
+            findings.append(
+                {
+                    "id": f.id,
+                    "finding_type": f.finding_type,
+                    "severity": f.severity,
+                    "description": f.description,
+                    "account_ids": f.account_ids,
+                    "step_start": f.step_start,
+                    "step_end": f.step_end,
+                    "confidence": f.confidence,
+                    "created_at": f.created_at.isoformat() if f.created_at else "",
+                }
+            )
 
-        progress.update(task, advance=20, description="[cyan]Reconstructing timelines...")
+        progress.update(
+            task, advance=20, description="[cyan]Reconstructing timelines..."
+        )
 
         # Get CSV evidence for timelines
-        csv_paths = [e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")]
+        csv_paths = [
+            e.filename
+            for e in evidence_items
+            if str(e.filename).lower().endswith(".csv")
+        ]
 
         timeline_map = {}
         narrative = ""
@@ -393,15 +474,24 @@ def report(
                 # Get top flagged accounts
                 # Sort findings by severity then confidence
                 sev_map = {"high": 3, "medium": 2, "low": 1}
-                sorted_f = sorted(findings, key=lambda x: (sev_map.get(x.get('severity', 'low').lower(), 0), x.get('confidence', 0)), reverse=True)
+                sorted_f = sorted(
+                    findings,
+                    key=lambda x: (
+                        sev_map.get(x.get("severity", "low").lower(), 0),
+                        x.get("confidence", 0),
+                    ),
+                    reverse=True,
+                )
 
                 top_accounts = []
                 for f in sorted_f:
-                    accs = f.get('account_ids', [])
+                    accs = f.get("account_ids", [])
                     for a in accs:
                         if a not in top_accounts:
                             top_accounts.append(a)
-                    if len(top_accounts) >= 5: # Limit to top 5 accounts to prevent massive reports
+                    if (
+                        len(top_accounts) >= 5
+                    ):  # Limit to top 5 accounts to prevent massive reports
                         break
 
                 top_accounts = top_accounts[:5]
@@ -410,20 +500,28 @@ def report(
                 first_account_narrative = ""
 
                 for account in top_accounts:
-                    events = reconstructor.build_account_timeline(df, account_id=account)
+                    events = reconstructor.build_account_timeline(
+                        df, account_id=account
+                    )
 
-                    acc_findings = [f for f in findings if account in (f.get('account_ids') or [])]
+                    acc_findings = [
+                        f for f in findings if account in (f.get("account_ids") or [])
+                    ]
                     events = reconstructor.annotate_events(events, acc_findings)
 
                     timeline_map[account] = reconstructor.to_dict_list(events)
 
                     if not first_account_narrative and events:
-                        first_account_narrative = reconstructor.generate_narrative(events, account, acc_findings)
+                        first_account_narrative = reconstructor.generate_narrative(
+                            events, account, acc_findings
+                        )
 
                 narrative = first_account_narrative
 
             except Exception as e:
-                console.print(f"[yellow]Failed to load CSV for timeline reconstruction: {str(e)}[/yellow]")
+                console.print(
+                    f"[yellow]Failed to load CSV for timeline reconstruction: {e!s}[/yellow]"
+                )
         else:
             if not findings:
                 narrative = "No findings were recorded for this case."
@@ -438,12 +536,21 @@ def report(
             timeline_map=timeline_map,
             custody=custody,
             narrative=narrative,
-            output_path=output
+            output_path=output,
         )
 
-        progress.update(task, advance=10, description="[green]Report generation complete!")
+        progress.update(
+            task, advance=10, description="[green]Report generation complete!"
+        )
 
-    console.print(Panel.fit(f"[green]Successfully generated report at {output}[/green]", title="Success", border_style="green"))
+    console.print(
+        Panel.fit(
+            f"[green]Successfully generated report at {output}[/green]",
+            title="Success",
+            border_style="green",
+        )
+    )
+
 
 @ml_app.command("train")
 def ml_train(
@@ -452,12 +559,14 @@ def ml_train(
     """
     Trains ML models on the case evidence and produces evaluation artifacts.
     """
+
     from moffit.ml.evaluate import evaluate_all
-    import json
 
     manager = get_case_manager()
     evidence_items = manager.get_evidence(case_id)
-    csv_paths = [e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")]
+    csv_paths = [
+        e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")
+    ]
     if not csv_paths:
         console.print("[red]No CSV evidence registered for this case.[/red]")
         raise typer.Exit(1)
@@ -472,11 +581,13 @@ def ml_train(
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
         TaskProgressColumn(),
-        console=console
+        console=console,
     ) as progress:
         task = progress.add_task("[cyan]Training models...", total=100)
 
-        progress.update(task, advance=50, description="[cyan]Extracting features and training...")
+        progress.update(
+            task, advance=50, description="[cyan]Extracting features and training..."
+        )
         metrics = evaluate_all(df, output_dir)
 
         progress.update(task, advance=50, description="[green]Training complete!")
@@ -496,27 +607,35 @@ def ml_train(
             f"{m['recall']:.3f}",
             f"{m['f1']:.3f}",
             f"{m['auprc']:.3f}",
-            f"{m['roc_auc']:.3f}"
+            f"{m['roc_auc']:.3f}",
         )
 
     console.print(table)
-    console.print(Panel.fit(f"[green]Artifacts saved to {output_dir}[/green]", title="Success", border_style="green"))
+    console.print(
+        Panel.fit(
+            f"[green]Artifacts saved to {output_dir}[/green]",
+            title="Success",
+            border_style="green",
+        )
+    )
 
 
 @ml_app.command("rank")
 def ml_rank(
     case_id: str = typer.Option(..., "--case-id", help="UUID of the case"),
-    top: int = typer.Option(20, "--top", help="Number of top accounts to display")
+    top: int = typer.Option(20, "--top", help="Number of top accounts to display"),
 ) -> None:
     """
     Ranks accounts by fraud probability using the trained XGBoost model.
     """
-    from moffit.ml.features import FeatureEngineer
     from moffit.ml.classifier import FraudClassifier
+    from moffit.ml.features import FeatureEngineer
 
     manager = get_case_manager()
     evidence_items = manager.get_evidence(case_id)
-    csv_paths = [e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")]
+    csv_paths = [
+        e.filename for e in evidence_items if str(e.filename).lower().endswith(".csv")
+    ]
     if not csv_paths:
         console.print("[red]No CSV evidence registered for this case.[/red]")
         raise typer.Exit(1)
@@ -524,7 +643,9 @@ def ml_rank(
     output_dir = os.path.join("reports", "ml", case_id)
     model_path = os.path.join(output_dir, "xgboost_model.joblib")
     if not os.path.exists(model_path):
-        console.print("[red]No trained XGBoost model found. Run 'moffit ml train' first.[/red]")
+        console.print(
+            "[red]No trained XGBoost model found. Run 'moffit ml train' first.[/red]"
+        )
         raise typer.Exit(1)
 
     loader = PaySimLoader()
@@ -533,7 +654,7 @@ def ml_rank(
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
-        console=console
+        console=console,
     ) as progress:
         task = progress.add_task("[cyan]Ranking accounts...", total=None)
 
@@ -557,7 +678,7 @@ def ml_rank(
             str(i + 1),
             str(row["account_id"]),
             f"{row['max_fraud_probability']:.4f}",
-            str(row["tx_count"])
+            str(row["tx_count"]),
         )
 
     console.print(table)

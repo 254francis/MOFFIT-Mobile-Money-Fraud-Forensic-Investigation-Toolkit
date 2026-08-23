@@ -2,9 +2,10 @@ import hashlib
 import hmac
 import json
 import os
+from datetime import UTC, datetime
+from typing import Any
+
 import pandas as pd
-from datetime import datetime, timezone
-from typing import Dict, Any, Tuple, List, Optional
 
 
 def hash_file(filepath: str) -> dict:
@@ -33,7 +34,7 @@ def hash_file(filepath: str) -> dict:
         "md5": md5_hash.hexdigest(),
         "file_size": file_stat.st_size,
         "filename": os.path.basename(filepath),
-        "acquired_at": datetime.now(timezone.utc).isoformat()
+        "acquired_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -47,7 +48,7 @@ def hash_dataframe(df: pd.DataFrame) -> str:
     Returns:
         The SHA-256 hex digest of the DataFrame's JSON representation.
     """
-    records = df.to_dict(orient='records')
+    records = df.to_dict(orient="records")
     json_bytes = json.dumps(records, sort_keys=True).encode()
     return hashlib.sha256(json_bytes).hexdigest()
 
@@ -93,8 +94,8 @@ class EvidenceManifest:
         """
         Initializes an empty EvidenceManifest.
         """
-        self.items: List[Dict[str, Any]] = []
-        self.finalized_manifest: Optional[Dict[str, Any]] = None
+        self.items: list[dict[str, Any]] = []
+        self.finalized_manifest: dict[str, Any] | None = None
 
     def add_item(self, filepath: str, notes: str = "") -> None:
         """
@@ -113,7 +114,7 @@ class EvidenceManifest:
             "sha256": file_info["sha256"],
             "md5": file_info["md5"],
             "acquired_at": file_info["acquired_at"],
-            "notes": notes
+            "notes": notes,
         }
         self.items.append(item_record)
 
@@ -130,7 +131,7 @@ class EvidenceManifest:
             "type": "dataframe",
             "label": label,
             "sha256": sha256_hash,
-            "acquired_at": datetime.now(timezone.utc).isoformat()
+            "acquired_at": datetime.now(UTC).isoformat(),
         }
         self.items.append(item_record)
 
@@ -151,9 +152,9 @@ class EvidenceManifest:
         self.finalized_manifest = {
             "case_id": case_id,
             "investigator": investigator,
-            "finalized_at": datetime.now(timezone.utc).isoformat(),
+            "finalized_at": datetime.now(UTC).isoformat(),
             "items": self.items,
-            "manifest_hash": manifest_hash
+            "manifest_hash": manifest_hash,
         }
         return self.finalized_manifest
 
@@ -174,7 +175,7 @@ class EvidenceManifest:
             json.dump(self.finalized_manifest, f, indent=4)
 
     @staticmethod
-    def verify_manifest(manifest_path: str) -> Tuple[bool, List[str]]:
+    def verify_manifest(manifest_path: str) -> tuple[bool, list[str]]:
         """
         Verifies a saved manifest by checking the manifest hash and individual file hashes.
 
@@ -188,8 +189,12 @@ class EvidenceManifest:
         with open(manifest_path, "r") as f:
             manifest = json.load(f)
 
-        concatenated_hashes = "".join(item["sha256"] for item in manifest.get("items", []))
-        expected_manifest_hash = hashlib.sha256(concatenated_hashes.encode()).hexdigest()
+        concatenated_hashes = "".join(
+            item["sha256"] for item in manifest.get("items", [])
+        )
+        expected_manifest_hash = hashlib.sha256(
+            concatenated_hashes.encode()
+        ).hexdigest()
 
         failed_items = []
         all_valid = True
